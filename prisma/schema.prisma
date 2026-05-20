@@ -7,16 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  nama      String
-  username  String   @unique
-  password  String
-  role      String
-  divisi    String
-  createdAt DateTime @default(now())
-}
-
 model Report {
   id          String   @id @default(cuid())
   invoice     String
@@ -24,4 +14,120 @@ model Report {
   qtySelesai  Int
   kendala     String
   createdAt   DateTime @default(now())
+}
+
+model User {
+  id         String   @id @default(cuid())
+  nama       String
+  username   String   @unique
+  password   String
+  role       String
+  divisi     String
+  createdAt  DateTime @default(now())
+}
+
+model LeadOrder {
+  id                 String   @id @default(cuid())
+
+  leadCode           String   @unique
+  namaCs             String
+
+  namaKonsumen       String
+  noHp               String
+  alamat             String?
+
+  namaArtikel        String
+  jenisOrder         String?
+  bahan              String?
+  jenisKerah         String?
+  jenisLengan        String?
+  qty                Int?
+
+  catatanDesain      String?
+  materiDesain       String?
+  hasilDesain        String?
+  catatanRevisi      String?
+  fileMockup         String?
+  fileFinalDesain    String?
+
+  hargaSatuan        Int?
+  totalHarga         Int?
+  dp                 Int?
+  sisaPelunasan      Int?
+
+  tanggalDp          DateTime?
+  tanggalPelunasan   DateTime?
+  buktiDp            String?
+
+  statusLead         String   @default("PROSPEK")
+  statusDesain       String   @default("BELUM MASUK DESAIN")
+  statusPembayaran   String   @default("BELUM DP")
+
+  alasanTidakLanjut  String?
+
+  approvedDesignAt   DateTime?
+  validatedDpAt      DateTime?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  messages           LeadMessage[]
+}
+
+model LeadMessage {
+  id          String   @id @default(cuid())
+
+  leadOrderId String
+  senderRole  String
+  senderName  String
+  message     String?
+  fileUrl     String?
+
+  createdAt   DateTime @default(now())
+
+  leadOrder   LeadOrder @relation(fields: [leadOrderId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id                    String   @id @default(cuid())
+
+  noInvoice             String   @unique
+  namaCs                String
+
+  namaKonsumen          String
+  alamat                String
+  noHp                  String
+
+  tanggalProduksi       DateTime?
+  deadline              DateTime?
+
+  orderType             String
+  jenisKerah            String
+  jenisLengan           String
+  bahan                 String
+
+  qty                   Int
+
+  hargaSatuan           Int
+  totalHarga            Int
+
+  dp                    Int
+  sisaPelunasan         Int
+
+  tanggalDp             DateTime?
+  tanggalPelunasan      DateTime?
+
+  beratBahan            Float
+  konsumsiTinta         Float
+  panjangKertas         Float
+
+  mockupDesign          String?
+  buktiDp               String?
+
+  paymentStatus         String   @default("MENUNGGU DP")
+  adminValidation       Boolean  @default(false)
+
+  status                String   @default("DESAIN")
+
+  createdAt             DateTime @default(now())
 }
