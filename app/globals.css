@@ -1,26 +1,103 @@
 @import "tailwindcss";
 
+/* Tema futuristik: hitam, orange, abu-abu, merah, putih */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --neo-bg: #030304;
+  --neo-surface: rgba(12, 12, 16, 0.85);
+  --neo-line: rgba(63, 63, 70, 0.9);
+  --neo-orange: #ea580c;
+  --neo-orange-glow: rgba(234, 88, 12, 0.35);
+  --neo-red: #dc2626;
+  --neo-muted: #a1a1aa;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--neo-bg);
+  --color-foreground: #fafafa;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+body {
+  background-color: var(--neo-bg);
+  color: #fafafa;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Area konten utama (sebelah sidebar) */
+.neo-main {
+  flex: 1 1 0%;
+  width: 100%;
+  min-height: 100vh;
+  padding: 1.5rem;
+  color: #fafafa;
+  background-color: #030304;
+  background-image: radial-gradient(
+      ellipse 100% 80% at 50% -30%,
+      rgba(234, 88, 12, 0.11),
+      transparent 55%
+    ),
+    linear-gradient(180deg, #050505 0%, #030304 45%, #0a0808 100%);
+}
+
+@media (min-width: 768px) {
+  .neo-main {
+    padding: 2rem;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.neo-card {
+  border-radius: 1rem;
+  border: 1px solid rgba(63, 63, 70, 0.85);
+  background: rgba(12, 12, 16, 0.65);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 60px -24px var(--neo-orange-glow);
+}
+
+.neo-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(63 63 70);
+  background: rgba(9, 9, 11, 0.85);
+  padding: 0.75rem 1rem;
+  color: #fafafa;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.neo-input::placeholder {
+  color: #71717a;
+}
+
+.neo-input:focus {
+  border-color: #ea580c;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.2);
+}
+
+.neo-btn-primary {
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #f97316 100%);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.25rem;
+  box-shadow: 0 0 28px -6px var(--neo-orange-glow);
+  transition: filter 0.15s, transform 0.1s;
+}
+
+.neo-btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.neo-btn-danger {
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.25rem;
+  box-shadow: 0 0 20px -8px rgba(220, 38, 38, 0.55);
+  transition: filter 0.15s;
+}
+
+.neo-btn-danger:hover {
+  filter: brightness(1.08);
 }
