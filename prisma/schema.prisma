@@ -7,127 +7,571 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Report {
-  id          String   @id @default(cuid())
-  invoice     String
-  divisi      String
-  qtySelesai  Int
-  kendala     String
-  createdAt   DateTime @default(now())
-}
-
-model User {
-  id         String   @id @default(cuid())
-  nama       String
-  username   String   @unique
-  password   String
-  role       String
-  divisi     String
-  createdAt  DateTime @default(now())
-}
-
-model LeadOrder {
-  id                 String   @id @default(cuid())
-
-  leadCode           String   @unique
-  namaCs             String
-
-  namaKonsumen       String
-  noHp               String
-  alamat             String?
-
-  namaArtikel        String
-  jenisOrder         String?
-  bahan              String?
-  jenisKerah         String?
-  jenisLengan        String?
-  qty                Int?
-
-  catatanDesain      String?
-  materiDesain       String?
-  hasilDesain        String?
-  catatanRevisi      String?
-  fileMockup         String?
-  fileFinalDesain    String?
-
-  hargaSatuan        Int?
-  totalHarga         Int?
-  dp                 Int?
-  sisaPelunasan      Int?
-
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AccountingTransaction {
+  id                 String          @id
+  finalOrderId       String          @unique
+  invoiceNumber      String          @unique
+  currency           String          @default("IDR")
+  totalHarga         Int
+  dp                 Int             @default(0)
+  sisaPelunasan      Int
+  paymentStatus      PaymentStatus   @default(MENUNGGU_DP)
   tanggalDp          DateTime?
   tanggalPelunasan   DateTime?
   buktiDp            String?
+  dpExemptApproved   Boolean         @default(false)
+  dpExemptReason     String?
+  dpExemptApprovedBy String?
+  dpExemptApprovedAt DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime
+  FinalOrder         FinalOrder      @relation(fields: [finalOrderId], references: [id], onDelete: Cascade)
+  PaymentLedger      PaymentLedger[]
 
-  statusLead         String   @default("PROSPEK")
-  statusDesain       String   @default("BELUM MASUK DESAIN")
-  statusPembayaran   String   @default("BELUM DP")
-
-  alasanTidakLanjut  String?
-
-  approvedDesignAt   DateTime?
-  validatedDpAt      DateTime?
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  messages           LeadMessage[]
+  @@index([createdAt])
+  @@index([paymentStatus])
+  @@index([tanggalDp])
+  @@index([tanggalPelunasan])
 }
 
-model LeadMessage {
-  id          String   @id @default(cuid())
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Customer {
+  id         String       @id
+  nama       String
+  noHp       String
+  alamat     String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime
+  FinalOrder FinalOrder[]
 
+  @@index([createdAt])
+  @@index([noHp])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model DesignQueueItem {
+  id                   String                  @id
+  leadCode             String?                 @unique
+  namaKonsumen         String
+  namaArtikel          String
+  materiDesain         String?
+  prioritas            DesignQueuePrioritas    @default(REGULER)
+  statusDesain         DesignQueueStatusDesain @default(MENUNGGU)
+  csId                 String?
+  csNama               String
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime
+  processedAt          DateTime?
+  approvedAt           DateTime?
+  artikelId            String                  @unique
+  assignedDesignerId   String?
+  assignedDesignerNama String?
+  designId             String
+  finalDesignFile      String?
+  returnedToCsAt       DateTime?
+  desainUtama          String?
+  logoSponsor          String?
+  hasilDesain          String?
+  accSubmittedAt       DateTime?
+  alamatPengiriman     String?
+  dpAmount             Int?
+  jenisBahan           String?
+  jenisKerah           String?
+  jenisOrder           String?
+  lengan               String?
+  noTelepon            String?
+  readyForAdmin        Boolean                 @default(false)
+  sisaPelunasan        Int?
+  sppNumber            String?
+  tanggalBayarDp       DateTime?
+  tanggalDeadline      DateTime?
+  totalOrder           Int?
+  revisionCount        Int                     @default(0)
+  buktiDp              String?
+  hargaSatuan          Int?
+  fileDesainProduksi   String?
+  sppGroupId           String?
+  catatanFinishing     String?
+  ongkosKirim          Int?
+  DesignQueueMessage   DesignQueueMessage[]
+  FinalOrder           FinalOrder?
+
+  @@index([assignedDesignerId])
+  @@index([csId])
+  @@index([designId])
+  @@index([prioritas, createdAt])
+  @@index([readyForAdmin])
+  @@index([sppGroupId])
+  @@index([statusDesain])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model DesignQueueMessage {
+  id                String                    @id
+  designQueueItemId String
+  senderRole        DesignQueueNoteSenderRole
+  senderName        String
+  message           String
+  createdAt         DateTime                  @default(now())
+  DesignQueueItem   DesignQueueItem           @relation(fields: [designQueueItemId], references: [id], onDelete: Cascade)
+
+  @@index([designQueueItemId, createdAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model FinalOrder {
+  id                    String                 @id
+  orderNumber           String                 @unique
+  status                FinalOrderStatus       @default(DRAFT)
+  submittedAt           DateTime?
+  submittedByUserId     String?
+  submittedByName       String?
+  namaCs                String
+  customerId            String?
+  namaKonsumen          String
+  noHp                  String
+  alamat                String?
+  namaArtikel           String
+  jenisOrder            String?
+  bahan                 String?
+  jenisKerah            String?
+  jenisLengan           String?
+  qty                   Int
+  deadline              DateTime?
+  needsKancing          Boolean                @default(false)
+  needsDTF              Boolean                @default(false)
+  fileDesainFinal       String?
+  mockupApprovedAt      DateTime?
+  catatanProduksi       String?
+  catatanCs             String?
+  hargaSatuan           Int?
+  totalHarga            Int
+  dp                    Int                    @default(0)
+  sisaPelunasan         Int
+  tanggalDp             DateTime?
+  tanggalPelunasan      DateTime?
+  buktiDp               String?
+  legacyLeadOrderId     String?                @unique
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime
+  deliveredAt           DateTime?
+  deliveryStatus        DeliveryStatus         @default(BELUM_KIRIM)
+  designQueueItemId     String?                @unique
+  ongkosKirim           Int?
+  AccountingTransaction AccountingTransaction?
+  Customer              Customer?              @relation(fields: [customerId], references: [id])
+  DesignQueueItem       DesignQueueItem?       @relation(fields: [designQueueItemId], references: [id])
+  FinalOrderRosterLine  FinalOrderRosterLine[]
+  ProductionPipeline    ProductionPipeline?
+
+  @@index([createdAt])
+  @@index([deliveryStatus])
+  @@index([namaCs])
+  @@index([needsKancing, needsDTF])
+  @@index([status])
+  @@index([submittedAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model FinalOrderRosterLine {
+  id            String     @id
+  finalOrderId  String
+  nama          String
+  nomorPunggung String?
+  ukuran        String?
+  catatan       String?
+  sortOrder     Int        @default(0)
+  FinalOrder    FinalOrder @relation(fields: [finalOrderId], references: [id], onDelete: Cascade)
+
+  @@index([finalOrderId])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model LeadMessage {
+  id          String    @id
   leadOrderId String
   senderRole  String
   senderName  String
   message     String?
   fileUrl     String?
-
-  createdAt   DateTime @default(now())
-
-  leadOrder   LeadOrder @relation(fields: [leadOrderId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  LeadOrder   LeadOrder @relation(fields: [leadOrderId], references: [id], onDelete: Cascade)
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model LeadOrder {
+  id                      String                  @id
+  leadCode                String                  @unique
+  namaCs                  String
+  namaKonsumen            String
+  noHp                    String
+  alamat                  String?
+  namaArtikel             String
+  jenisOrder              String?
+  bahan                   String?
+  jenisKerah              String?
+  jenisLengan             String?
+  qty                     Int?
+  catatanDesain           String?
+  materiDesain            String?
+  fileMockup              String?
+  fileFinalDesain         String?
+  hargaSatuan             Int?
+  totalHarga              Int?
+  dp                      Int?
+  sisaPelunasan           Int?
+  tanggalDp               DateTime?
+  tanggalPelunasan        DateTime?
+  buktiDp                 String?
+  statusLead              String                  @default("PROSPEK")
+  statusDesain            String                  @default("BELUM MASUK DESAIN")
+  statusPembayaran        String                  @default("BELUM DP")
+  alasanTidakLanjut       String?
+  approvedDesignAt        DateTime?
+  validatedDpAt           DateTime?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime
+  catatanRevisi           String?
+  hasilDesain             String?
+  designAgreedAt          DateTime?
+  dpExemptApprovedAt      DateTime?
+  dpExemptApprovedBy      String?
+  dpExemptReason          String?
+  dpExemptRejectionReason String?
+  dpExemptRequested       Boolean                 @default(false)
+  dpExemptStatus          String                  @default("NONE")
+  LeadMessage             LeadMessage[]
+  Order                   Order?
+  OrderRosterLine         OrderRosterLine[]
+  ProductionRequest       ProductionRequest[]
+  SuratPerintahProduksi   SuratPerintahProduksi[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model Order {
-  id                    String   @id @default(cuid())
-
-  noInvoice             String   @unique
+  id                    String                 @id
+  noInvoice             String                 @unique
   namaCs                String
-
   namaKonsumen          String
   alamat                String
   noHp                  String
-
   tanggalProduksi       DateTime?
   deadline              DateTime?
-
   orderType             String
   jenisKerah            String
   jenisLengan           String
   bahan                 String
-
   qty                   Int
-
   hargaSatuan           Int
   totalHarga            Int
-
   dp                    Int
   sisaPelunasan         Int
-
-  tanggalDp             DateTime?
-  tanggalPelunasan      DateTime?
-
   beratBahan            Float
   konsumsiTinta         Float
   panjangKertas         Float
-
-  mockupDesign          String?
+  status                String                 @default("DESAIN")
+  createdAt             DateTime               @default(now())
+  adminValidation       Boolean                @default(false)
   buktiDp               String?
+  mockupDesign          String?
+  paymentStatus         String                 @default("MENUNGGU DP")
+  tanggalDp             DateTime?
+  tanggalPelunasan      DateTime?
+  leadOrderId           String?                @unique
+  LeadOrder             LeadOrder?             @relation(fields: [leadOrderId], references: [id])
+  SuratPerintahProduksi SuratPerintahProduksi?
+}
 
-  paymentStatus         String   @default("MENUNGGU DP")
-  adminValidation       Boolean  @default(false)
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model OrderRosterLine {
+  id            String    @id
+  leadOrderId   String
+  nama          String
+  nomorPunggung String?
+  ukuran        String?
+  catatan       String?
+  sortOrder     Int       @default(0)
+  LeadOrder     LeadOrder @relation(fields: [leadOrderId], references: [id], onDelete: Cascade)
+}
 
-  status                String   @default("DESAIN")
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PaymentLedger {
+  id                    String                @id
+  accountingId          String
+  type                  PaymentLedgerType
+  amount                Int
+  buktiUrl              String?
+  recordedAt            DateTime              @default(now())
+  recordedByUserId      String?
+  recordedByName        String
+  note                  String?
+  AccountingTransaction AccountingTransaction @relation(fields: [accountingId], references: [id], onDelete: Cascade)
 
-  createdAt             DateTime @default(now())
+  @@index([accountingId])
+  @@index([type, recordedAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductionOperatorAssignment {
+  id                   String                 @id
+  productionPipelineId String
+  stage                ProductionStatus?
+  userId               String
+  assignmentRole       OperatorAssignmentRole @default(PRIMARY)
+  assignedAt           DateTime               @default(now())
+  unassignedAt         DateTime?
+  assignedByUserId     String?
+  ProductionPipeline   ProductionPipeline     @relation(fields: [productionPipelineId], references: [id], onDelete: Cascade)
+  User                 User                   @relation(fields: [userId], references: [id])
+
+  @@index([productionPipelineId, stage])
+  @@index([stage, assignmentRole])
+  @@index([userId, assignedAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductionPipeline {
+  id                           String                         @id
+  finalOrderId                 String                         @unique
+  productionNumber             String                         @unique
+  pipelineVersion              Int                            @default(1)
+  currentStatus                ProductionStatus               @default(ADMIN_PRODUKSI)
+  adminProduksiStatus          AdminProduksiStatus            @default(PENDING)
+  adminValidatedAt             DateTime?
+  adminValidatedBy             String?
+  needsKancing                 Boolean                        @default(false)
+  needsDTF                     Boolean                        @default(false)
+  kancingCompletedAt           DateTime?
+  dtfCompletedAt               DateTime?
+  currentOperatorId            String?
+  deadline                     DateTime?
+  priority                     String                         @default("NORMAL")
+  isOnHold                     Boolean                        @default(false)
+  holdReason                   String?
+  completedAt                  DateTime?
+  beratBahan                   Float?
+  konsumsiTinta                Float?
+  panjangKertas                Float?
+  createdAt                    DateTime                       @default(now())
+  updatedAt                    DateTime
+  shipReleaseNote              String?
+  shipReleaseRequestedAt       DateTime?
+  shipReleaseRequestedBy       String?
+  shipReleaseStatus            ShipReleaseStatus              @default(NONE)
+  shipReleaseValidatedAt       DateTime?
+  shipReleaseValidatedBy       String?
+  ProductionOperatorAssignment ProductionOperatorAssignment[]
+  FinalOrder                   FinalOrder                     @relation(fields: [finalOrderId], references: [id], onDelete: Cascade)
+  ProductionStagePlan          ProductionStagePlan[]
+  ProductionStatusHistory      ProductionStatusHistory[]
+
+  @@index([adminProduksiStatus])
+  @@index([completedAt])
+  @@index([createdAt])
+  @@index([currentStatus, adminProduksiStatus])
+  @@index([currentStatus])
+  @@index([deadline])
+  @@index([needsKancing, needsDTF])
+  @@index([priority])
+  @@index([shipReleaseStatus])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductionRequest {
+  id                    String                 @id
+  leadOrderId           String
+  requestedBy           String
+  requestedAt           DateTime               @default(now())
+  requestType           String
+  status                String                 @default("PENDING_ADMIN")
+  notesCs               String?
+  rejectionReason       String?
+  LeadOrder             LeadOrder              @relation(fields: [leadOrderId], references: [id], onDelete: Cascade)
+  SuratPerintahProduksi SuratPerintahProduksi?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductionStagePlan {
+  id                   String             @id
+  productionPipelineId String
+  stage                ProductionStatus
+  sequence             Int
+  isRequired           Boolean            @default(true)
+  status               StagePlanStatus    @default(PENDING)
+  plannedStartAt       DateTime?
+  plannedEndAt         DateTime?
+  actualStartAt        DateTime?
+  actualEndAt          DateTime?
+  estimatedMinutes     Int?
+  delayMinutes         Int?
+  ProductionPipeline   ProductionPipeline @relation(fields: [productionPipelineId], references: [id], onDelete: Cascade)
+
+  @@unique([productionPipelineId, stage])
+  @@index([productionPipelineId, sequence])
+  @@index([stage, status])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductionStatusHistory {
+  id                   String              @id
+  productionPipelineId String
+  fromStatus           ProductionStatus?
+  toStatus             ProductionStatus
+  eventType            ProductionEventType
+  changedByUserId      String?
+  changedByName        String
+  changedByRole        String
+  note                 String?
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+  ProductionPipeline   ProductionPipeline  @relation(fields: [productionPipelineId], references: [id], onDelete: Cascade)
+
+  @@index([eventType, createdAt])
+  @@index([productionPipelineId, createdAt])
+  @@index([toStatus, createdAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Report {
+  id         String   @id
+  invoice    String
+  divisi     String
+  qtySelesai Int
+  kendala    String
+  createdAt  DateTime @default(now())
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SuratPerintahProduksi {
+  id                  String            @id
+  sppNumber           String            @unique
+  productionRequestId String            @unique
+  leadOrderId         String
+  orderId             String?           @unique
+  issuedBy            String
+  issuedAt            DateTime          @default(now())
+  status              String            @default("TERBIT")
+  LeadOrder           LeadOrder         @relation(fields: [leadOrderId], references: [id])
+  Order               Order?            @relation(fields: [orderId], references: [id])
+  ProductionRequest   ProductionRequest @relation(fields: [productionRequestId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model User {
+  id                           String                         @id
+  nama                         String
+  username                     String                         @unique
+  password                     String
+  role                         String
+  divisi                       String
+  createdAt                    DateTime                       @default(now())
+  csId                         String?                        @unique
+  dsId                         String?                        @unique
+  ProductionOperatorAssignment ProductionOperatorAssignment[]
+}
+
+enum AdminProduksiStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DeliveryStatus {
+  BELUM_KIRIM
+  TERKIRIM
+}
+
+enum DesignQueueNoteSenderRole {
+  CS
+  DESAINER
+}
+
+enum DesignQueuePrioritas {
+  REGULER
+  EXPRESS
+}
+
+enum DesignQueueStatusDesain {
+  MENUNGGU
+  SEDANG_DIPROSES
+  SELESAI
+  DIKEMBALIKAN_CS
+  DISETUJUI_CS
+  FILE_DISETUJUI_UPLOADED
+  SUDAH_DI_DESAIN
+  SUDAH_DI_REVISI
+  MENUNGGU_ACC_KONSUMEN
+  MENUNGGU_DP
+}
+
+enum FinalOrderStatus {
+  DRAFT
+  SUBMITTED
+  CANCELLED
+}
+
+enum OperatorAssignmentRole {
+  PRIMARY
+  HELPER
+  SUPERVISOR
+}
+
+enum PaymentLedgerType {
+  DP
+  PELUNASAN
+  ADJUSTMENT
+  REFUND
+}
+
+enum PaymentStatus {
+  MENUNGGU_DP
+  DP_TERIMA
+  SEBAGIAN
+  LUNAS
+  DP_DIKECUALIKAN
+}
+
+enum ProductionEventType {
+  ORDER_CREATED
+  ADMIN_APPROVED
+  ADMIN_REJECTED
+  STAGE_ADVANCED
+  STAGE_ROLLBACK
+  HOLD_STARTED
+  HOLD_ENDED
+  OPERATOR_ASSIGNED
+  OPERATOR_UNASSIGNED
+}
+
+enum ProductionStatus {
+  ADMIN_PRODUKSI
+  SETTING
+  LAYOUT_PRINT
+  PRINTING
+  PREPARE_BAHAN_KAIN
+  POTONG_KERTAS
+  TIMBANG_HASIL_POTONG
+  PRESS
+  JAHIT
+  FINISHING
+  KANCING
+  DTF
+  PACKING
+  BARANG_SELESAI
+  SIAP_KIRIM
+}
+
+enum ShipReleaseStatus {
+  NONE
+  MENUNGGU_VALIDASI
+  DISETUJUI
+  DITOLAK
+}
+
+enum StagePlanStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
 }

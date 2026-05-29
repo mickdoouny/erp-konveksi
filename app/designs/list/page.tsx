@@ -55,6 +55,11 @@ export default function DesignsQueuePage() {
 
     setUserRole(user.role);
 
+    if (user.role === "desainer") {
+      router.replace("/desainer/antrian");
+      return;
+    }
+
     if (!["desainer", "owner"].includes(user.role)) {
       router.push(homePathByRole(user.role));
       return;
