@@ -45,7 +45,8 @@ export function AntrianDesainDetailStatusCard({
   const guidance = csAntrianDesainDetailGuidance(
     item.statusDesain,
     item.revisionCount,
-    item.fileDesainProduksi
+    item.fileDesainProduksi,
+    paymentStatus
   )
 
   return (
@@ -57,7 +58,7 @@ export function AntrianDesainDetailStatusCard({
           </p>
           <p className="mt-2">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(item.statusDesain)}`}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(item.statusDesain, paymentStatus)}`}
             >
               {statusText}
             </span>

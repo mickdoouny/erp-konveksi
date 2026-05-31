@@ -25,6 +25,8 @@ export async function approveDp(
   const paymentStatus =
     sisa <= 0 ? PaymentStatus.LUNAS : PaymentStatus.DP_TERIMA
 
+  const designQueueItemId = accounting.FinalOrder.designQueueItemId
+
   await prisma.$transaction([
     prisma.accountingTransaction.update({
       where: { id: accountingId },
@@ -41,6 +43,14 @@ export async function approveDp(
         updatedAt: now,
       },
     }),
+    ...(designQueueItemId
+      ? [
+          prisma.designQueueItem.update({
+            where: { id: designQueueItemId },
+            data: { tanggalBayarDp: now, updatedAt: now },
+          }),
+        ]
+      : []),
     prisma.paymentLedger.create({
       data: {
         id: randomUUID(),

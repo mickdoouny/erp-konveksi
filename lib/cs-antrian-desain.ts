@@ -1,4 +1,5 @@
 import type { DesignQueueStatusDesain } from "@prisma/client"
+import { isDpValidatedPaymentStatus } from "@/lib/status-labels"
 
 export type DesignFile = {
   name: string
@@ -110,7 +111,17 @@ export function parseCsAntrianDesainBody(
   return { ok: true }
 }
 
-export function statusBadgeClass(status: string): string {
+export function statusBadgeClass(
+  status: string,
+  accountingPaymentStatus?: string | null
+): string {
+  if (
+    status === "DISETUJUI_CS" &&
+    isAccountingDpValidated(accountingPaymentStatus)
+  ) {
+    return "border-sky-500/40 bg-sky-950/40 text-sky-200"
+  }
+
   switch (status) {
     case "MENUNGGU":
       return "border-zinc-600 bg-zinc-900/80 text-zinc-300"
@@ -143,15 +154,8 @@ export function canRequestRevisi(status: string): boolean {
   )
 }
 
-function normalizeAccountingPaymentStatus(
-  paymentStatus?: string | null
-): string {
-  return String(paymentStatus ?? "").trim().toUpperCase()
-}
-
 export function isAccountingDpValidated(paymentStatus?: string | null): boolean {
-  const key = normalizeAccountingPaymentStatus(paymentStatus)
-  return key !== "" && key !== "MENUNGGU_DP"
+  return isDpValidatedPaymentStatus(String(paymentStatus ?? ""))
 }
 
 export function labelCsAntrianDesainStatus(
@@ -234,7 +238,8 @@ export type CsAntrianDesainDetailGuidance = {
 export function csAntrianDesainDetailGuidance(
   status: string,
   revisionCount?: number | null,
-  fileDesainProduksi?: string | null
+  fileDesainProduksi?: string | null,
+  accountingPaymentStatus?: string | null
 ): CsAntrianDesainDetailGuidance | null {
   const key = status.trim().toUpperCase()
   const rev =
@@ -274,6 +279,13 @@ export function csAntrianDesainDetailGuidance(
           "CDR produksi sudah ada. Lengkapi data order (harga, DP, bukti transfer) lalu simpan.",
       }
     case "DISETUJUI_CS":
+      if (isAccountingDpValidated(accountingPaymentStatus)) {
+        return {
+          variant: "success",
+          message:
+            "DP sudah divalidasi Admin Keuangan. Order menunggu persetujuan Admin Produksi (cetak SPP).",
+        }
+      }
       return {
         variant: "success",
         message:

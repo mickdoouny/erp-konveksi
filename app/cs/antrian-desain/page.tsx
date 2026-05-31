@@ -135,6 +135,9 @@ export default function CsAntrianDesainPage() {
               </thead>
               <tbody>
                 {filtered.map((item) => {
+                  const paymentStatus =
+                    item.FinalOrder?.AccountingTransaction?.paymentStatus ??
+                    null
                   const rowAction = csAntrianDesainListRowAction(item)
                   const actionClass =
                     rowAction.variant === "primary"
@@ -162,12 +165,12 @@ export default function CsAntrianDesainPage() {
                       <td className="p-3 text-zinc-400">{item.csNama}</td>
                       <td className="p-3">
                         <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(item.statusDesain)}`}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(item.statusDesain, paymentStatus)}`}
                         >
                           {labelCsAntrianDesainStatus(
                             item.statusDesain,
                             item.revisionCount,
-                            item.FinalOrder?.AccountingTransaction?.paymentStatus
+                            paymentStatus
                           )}
                         </span>
                       </td>
