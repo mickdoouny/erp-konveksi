@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import { readStoredUser } from "@/lib/auth";
 import { homePathByRole } from "@/lib/auth-redirect";
 
 type UploadedFile = {
@@ -59,14 +60,12 @@ export default function OrdersPage() {
   };
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
+    const user = readStoredUser();
 
-    if (!userData) {
-      router.push("/login");
+    if (!user) {
+      router.replace("/login");
       return;
     }
-
-    const user = JSON.parse(userData);
 
     if (!["cs", "owner"].includes(user.role)) {
       router.push(homePathByRole(user.role));
@@ -181,15 +180,8 @@ export default function OrdersPage() {
       let namaCs = "CS";
 
       try {
-        const raw = localStorage.getItem(
-          "user"
-        );
-
-        if (raw) {
-          const u = JSON.parse(raw) as {
-            nama?: string;
-            username?: string;
-          };
+        const u = readStoredUser();
+        if (u) {
 
           namaCs =
             (u.nama && String(u.nama).trim()) ||

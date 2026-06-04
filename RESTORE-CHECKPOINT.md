@@ -1,3 +1,9 @@
+# Restore Checkpoint
+
+> **Checkpoint terbaru (Juni 2026, LAN login OK):** baca [`docs/HANDOFF-AGENT-CONTEXT.md`](docs/HANDOFF-AGENT-CONTEXT.md) bagian **CHECKPOINT — Juni 2026**. Operator: [`docs/LAN-OPERATOR-LOGIN.md`](docs/LAN-OPERATOR-LOGIN.md).
+
+---
+
 # Restore Checkpoint — 26 Mei 2026 (sebelum kode hilang)
 
 Titik acuan: pesan di chat agent `d16b5ccf`:
@@ -166,3 +172,10 @@ Izinkan Node.js / port **3000** pada jaringan **Private** saat popup Windows Fir
 ---
 
 *Dibuat otomatis saat restore checkpoint d16b5ccf — 28 Mei 2026.*
+
+---
+
+## Update Juni 2026
+
+- Login LAN (`npm run dev:lan`, cookie `erp_user`) **diverifikasi berjalan** di `192.168.0.16:3000`.
+- Handoff agent terkunci di `docs/HANDOFF-AGENT-CONTEXT.md` (branch `2026-05-20-5a67`, uncommitted).

@@ -4,6 +4,7 @@ export type AuthUser = {
   username: string
   role: string
   divisi: string
+  operatorDepartment?: string
 }
 
 type UserRecord = AuthUser & {
@@ -119,13 +120,18 @@ export const DEFAULT_USERS: UserRecord[] = [
   },
 ]
 
+export function isDemoUsername(username: string): boolean {
+  const normalized = username.trim().toLowerCase()
+  return DEFAULT_USERS.some((entry) => entry.username === normalized)
+}
+
 export function authenticateUser(
   username: string,
   password: string
 ): AuthUser | null {
+  const normalized = username.trim().toLowerCase()
   const user = DEFAULT_USERS.find(
-    (entry) =>
-      entry.username === username.trim() && entry.password === password
+    (entry) => entry.username === normalized && entry.password === password
   )
 
   if (!user) {
@@ -151,28 +157,21 @@ export function homePathByRole(role: string): string {
       return "/desainer/antrian"
     case "produksi":
       return "/report"
+    case "operator":
+      return "/operator"
     default:
       return "/login"
   }
 }
 
-const STORAGE_KEY = "user"
+import { readClientSessionUser } from "@/lib/login-session"
 
 export function readStoredUser(): AuthUser | null {
   if (typeof window === "undefined") {
     return null
   }
 
-  const raw = window.localStorage.getItem(STORAGE_KEY)
-  if (!raw) {
-    return null
-  }
-
-  try {
-    return JSON.parse(raw) as AuthUser
-  } catch {
-    return null
-  }
+  return readClientSessionUser()
 }
 
 type DemoAccountGroupDefinition = {

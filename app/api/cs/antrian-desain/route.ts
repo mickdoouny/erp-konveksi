@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto"
 import { NextResponse } from "next/server"
+import { DtfStatus } from "@prisma/client"
 import { apiErrorPayload } from "@/lib/api-error"
 import { prisma } from "@/lib/prisma"
 import {
@@ -10,23 +11,31 @@ import {
   serializeDesignFiles,
   type CreateDesignBatchInput,
 } from "@/lib/cs-antrian-desain"
+import { isCsAntrianDesainItem } from "@/lib/cs-antrian-produksi"
+import {
+  csDesignQueueOwnershipWhere,
+  parseCsRequestScope,
+} from "@/lib/cs-design-queue-access"
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const csNama = searchParams.get("csNama")
+    const scope = parseCsRequestScope(request)
+    const ownershipWhere = csDesignQueueOwnershipWhere(scope)
 
-    const items = await prisma.designQueueItem.findMany({
-      where: csNama ? { csNama } : undefined,
+    const rows = await prisma.designQueueItem.findMany({
+      where: ownershipWhere,
       orderBy: { createdAt: "desc" },
       include: {
         FinalOrder: {
           select: {
+            id: true,
             AccountingTransaction: { select: { paymentStatus: true } },
           },
         },
       },
     })
+
+    const items = rows.filter(isCsAntrianDesainItem)
 
     return NextResponse.json(items)
   } catch (error) {
@@ -75,6 +84,11 @@ export async function POST(request: Request) {
             namaArtikel: artikel.namaArtikel.trim(),
             sppNumber: artikel.spp?.trim() || null,
             materiDesain: artikel.catatanDesain?.trim() || null,
+            perluDtf: Boolean(artikel.perluDtf),
+            catatanDtf: artikel.catatanDtf?.trim() || null,
+            statusDtf: artikel.perluDtf
+              ? DtfStatus.MENUNGGU_ORDER
+              : DtfStatus.TIDAK_PERLU,
             desainUtama: artikel.desainUtama?.length
               ? serializeDesignFiles(artikel.desainUtama)
               : null,

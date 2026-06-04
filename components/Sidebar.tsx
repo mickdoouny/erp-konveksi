@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import NotificationBell from "@/components/notifications/notification-bell"
 import { NotificationProvider } from "@/components/notifications/notification-provider"
+import { readStoredUser } from "@/lib/auth"
+import { clearClientSession } from "@/lib/login-session"
 import { roleLabel } from "@/lib/roles"
 
 type User = {
@@ -19,6 +21,8 @@ const linkClass =
 const labelClass = "pt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500"
 
 function activeModuleLabel(pathname: string): string | null {
+  if (pathname.startsWith("/owner/operator")) return "Operator"
+  if (pathname.startsWith("/operator")) return "Operator"
   if (pathname.startsWith("/admin/keuangan")) return "Admin Keuangan"
   if (
     pathname.startsWith("/admin/final-orders") ||
@@ -27,6 +31,7 @@ function activeModuleLabel(pathname: string): string | null {
   ) {
     return "Admin Produksi"
   }
+  if (pathname.startsWith("/cs/antrian-produksi")) return "Antrian Produksi CS"
   if (pathname.startsWith("/cs/antrian-desain")) return "Antrian Desain CS"
   if (pathname.startsWith("/desainer")) return "Modul Desainer"
   return null
@@ -38,20 +43,12 @@ export default function Sidebar() {
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-    const raw = localStorage.getItem("user")
-    if (!raw) {
-      setUser(null)
-      return
-    }
-    try {
-      setUser(JSON.parse(raw) as User)
-    } catch {
-      setUser(null)
-    }
+    const stored = readStoredUser()
+    setUser(stored ? { nama: stored.nama, role: stored.role, divisi: stored.divisi } : null)
   }, [])
 
   function logout() {
-    localStorage.removeItem("user")
+    clearClientSession()
     router.push("/login")
   }
 
@@ -107,10 +104,20 @@ export default function Sidebar() {
                     Dashboard Owner
                   </Link>
                 </li>
+                <li>
+                  <Link href="/owner/operator" className={linkClass}>
+                    Operator
+                  </Link>
+                </li>
                 <li className={labelClass}>Admin</li>
                 <li>
                   <Link href="/admin/keuangan" className={linkClass}>
                     Admin Keuangan
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/dtf-vendors" className={linkClass}>
+                    Vendor DTF
                   </Link>
                 </li>
                 <li>
@@ -127,6 +134,11 @@ export default function Sidebar() {
                 <li>
                   <Link href="/cs/antrian-desain" className={linkClass}>
                     Antrian Desain CS
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/cs/antrian-produksi" className={linkClass}>
+                    Antrian Produksi CS
                   </Link>
                 </li>
                 <li>
@@ -155,6 +167,11 @@ export default function Sidebar() {
                   </Link>
                 </li>
                 <li>
+                  <Link href="/cs/antrian-produksi" className={linkClass}>
+                    Antrian Produksi
+                  </Link>
+                </li>
+                <li>
                   <Link href="/cs/antrian-desain/tambah" className={linkClass}>
                     Tambah Desain
                   </Link>
@@ -178,11 +195,18 @@ export default function Sidebar() {
             )}
 
             {role === "admin_keuangan" && (
-              <li>
-                <Link href="/admin/keuangan" className={linkClass}>
-                  Admin Keuangan
-                </Link>
-              </li>
+              <>
+                <li>
+                  <Link href="/admin/keuangan" className={linkClass}>
+                    Admin Keuangan
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/dtf-vendors" className={linkClass}>
+                    Vendor DTF
+                  </Link>
+                </li>
+              </>
             )}
 
             {role === "admin_produksi" && (
@@ -213,6 +237,14 @@ export default function Sidebar() {
                   </Link>
                 </li>
               </>
+            )}
+
+            {role === "operator" && (
+              <li>
+                <Link href="/operator" className={linkClass}>
+                  Dashboard Operator
+                </Link>
+              </li>
             )}
           </ul>
         </nav>

@@ -7,16 +7,19 @@ import { AntrianDesainDetailStatusCard } from "@/components/cs/antrian-desain-de
 import DesignPreviewPair from "@/components/cs/design-preview-pair"
 import { DesignQueueNotesSection } from "@/components/cs/design-queue-notes-section"
 import { EditKonsumenModal } from "@/components/cs/edit-konsumen-modal"
+import { DtfStatusReadonlyPanel } from "@/components/dtf/dtf-panels"
 import CsShell from "@/components/layout/cs-shell"
 import { BtnPrimary, BtnRevisi } from "@/components/ui/buttons"
-import { homePathByRole } from "@/lib/auth-redirect"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
 import {
   canCsEditKonsumen,
   csAntrianDesainRowActions,
   type DesignQueueItemRecord,
   type EditKonsumenPrefill,
 } from "@/lib/cs-antrian-desain"
+import { isCsAntrianProduksiItem } from "@/lib/cs-antrian-produksi"
 import type { DesignQueueMessageRecord } from "@/lib/design-queue-notes"
+import { withCsApiScope } from "@/lib/cs-design-queue-access"
 
 type DetailItem = DesignQueueItemRecord & {
   messages?: DesignQueueMessageRecord[]
@@ -27,6 +30,7 @@ type DetailItem = DesignQueueItemRecord & {
 
 export default function CsAntrianDesainDetailPage() {
   const router = useRouter()
+  const auth = useAuthGuard({ roles: ["cs", "owner"] })
   const params = useParams()
   const id = params.id as string
 
@@ -37,16 +41,25 @@ export default function CsAntrianDesainDetailPage() {
   const [editKonsumenItem, setEditKonsumenItem] =
     useState<EditKonsumenPrefill | null>(null)
   const [successToast, setSuccessToast] = useState<string | null>(null)
+  const [sessionUser, setSessionUser] = useState<{
+    role: string
+    id?: string
+    nama?: string
+  } | null>(null)
   const successToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
 
-  async function loadItem() {
+  async function loadItem(user = sessionUser) {
+    if (!user) return
     try {
       setLoading(true)
-      const res = await fetch(`/api/cs/antrian-desain/${id}`, {
-        cache: "no-store",
-      })
+      const res = await fetch(
+        withCsApiScope(`/api/cs/antrian-desain/${id}`, user),
+        {
+          cache: "no-store",
+        }
+      )
       if (!res.ok) {
         setItem(null)
         return
@@ -81,29 +94,34 @@ export default function CsAntrianDesainDetailPage() {
   }
 
   useEffect(() => {
-    const raw = localStorage.getItem("user")
-    if (!raw) {
-      router.push("/login")
-      return
-    }
+    if (auth.status !== "authenticated") return
+    const user = auth.user
 
-    const user = JSON.parse(raw)
-    if (!["cs", "owner"].includes(user.role)) {
-      router.push(homePathByRole(user.role))
-      return
-    }
+    setSessionUser(user)
+    queueMicrotask(() => {
+      void loadItem(user)
+    })
+  }, [auth.status, auth.user, id])
 
-    loadItem()
-  }, [router, id])
+  useEffect(() => {
+    if (!item || loading) return
+    if (isCsAntrianProduksiItem(item)) {
+      router.replace(`/cs/antrian-produksi/${id}`)
+    }
+  }, [item, loading, router, id])
 
   async function patchItem(body: Record<string, unknown>) {
+    if (!sessionUser) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/cs/antrian-desain/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
+      const res = await fetch(
+        withCsApiScope(`/api/cs/antrian-desain/${id}`, sessionUser),
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      )
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         alert(err.message ?? "Gagal memperbarui status")
@@ -122,14 +140,17 @@ export default function CsAntrianDesainDetailPage() {
     noTelepon: string
     alamatPengiriman: string
   }) {
-    if (!editKonsumenItem) {
+    if (!editKonsumenItem || !sessionUser) {
       return { ok: false, message: "Data antrian tidak ditemukan" }
     }
 
     setSaving(true)
     try {
       const res = await fetch(
-        `/api/cs/antrian-desain/${editKonsumenItem.id}`,
+        withCsApiScope(
+          `/api/cs/antrian-desain/${editKonsumenItem.id}`,
+          sessionUser
+        ),
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -220,6 +241,8 @@ export default function CsAntrianDesainDetailPage() {
           })
         }
       />
+
+      <DtfStatusReadonlyPanel item={item} />
 
       <div className="my-6">
         <DesignPreviewPair item={item} />

@@ -26,6 +26,27 @@ export type DesignQueueItemRecord = {
   revisionCount: number
   statusDesain: DesignQueueStatusDesain | string
   fileDesainProduksi?: string | null
+  perluDtf?: boolean
+  catatanDtf?: string | null
+  statusDtf?: string
+  fileDtfVendor?: string | null
+  fileDtfProof?: string | null
+  dtfVendorId?: string | null
+  DtfVendor?: {
+    id: string
+    name: string
+    contact?: string | null
+    phone?: string | null
+    bankAccount?: string | null
+  } | null
+  DtfPaymentRequest?: Array<{
+    id: string
+    nominal: number
+    status: string
+    requestedAt: string | Date
+    approvedAt?: string | Date | null
+    buktiBayarUrl?: string | null
+  }>
   leadCode?: string | null
   createdAt: string | Date
   updatedAt: string | Date
@@ -78,6 +99,8 @@ export type CreateArtikelInput = {
   namaArtikel: string
   spp?: string
   catatanDesain?: string
+  perluDtf?: boolean
+  catatanDtf?: string
   desainUtama?: DesignFile[]
   logoSponsor?: DesignFile[]
 }
@@ -172,8 +195,10 @@ export function labelCsAntrianDesainStatus(
   return statusLabel(status)
 }
 
+/** Includes legacy FILE_DISETUJUI_UPLOADED (same workflow phase). */
 export function isMenungguDp(status: string): boolean {
-  return status.trim().toUpperCase() === "MENUNGGU_DP"
+  const key = status.trim().toUpperCase()
+  return key === "MENUNGGU_DP" || key === "FILE_DISETUJUI_UPLOADED"
 }
 
 export function hasProductionDesignFile(item: {
@@ -266,6 +291,7 @@ export function csAntrianDesainDetailGuidance(
           "Tunjukkan hasil desain ke konsumen. Jika setuju, klik ACC dari konsumen.",
       }
     case "MENUNGGU_DP":
+    case "FILE_DISETUJUI_UPLOADED":
       if (!hasProductionDesignFile({ fileDesainProduksi })) {
         return {
           variant: "warning",

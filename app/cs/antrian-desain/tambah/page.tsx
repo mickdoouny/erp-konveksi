@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import CsFullscreenPage from "@/components/cs/cs-fullscreen-page"
-import { homePathByRole } from "@/lib/auth-redirect"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
 import type { DesignFile } from "@/lib/cs-antrian-desain"
 
 type ArtikelForm = {
   namaArtikel: string
   spp: string
   catatanDesain: string
+  perluDtf: boolean
+  catatanDtf: string
   desainUtama: DesignFile[]
   logoSponsor: DesignFile[]
 }
@@ -18,6 +20,8 @@ const emptyArtikel = (): ArtikelForm => ({
   namaArtikel: "",
   spp: "",
   catatanDesain: "",
+  perluDtf: false,
+  catatanDtf: "",
   desainUtama: [],
   logoSponsor: [],
 })
@@ -46,22 +50,14 @@ export default function TambahDesainPage() {
   const [saveError, setSaveError] = useState("")
   const [uploading, setUploading] = useState("")
 
+  const auth = useAuthGuard({ roles: ["cs", "owner"] })
+
   useEffect(() => {
-    const raw = localStorage.getItem("user")
-    if (!raw) {
-      router.push("/login")
-      return
-    }
-
-    const user = JSON.parse(raw)
-    if (!["cs", "owner"].includes(user.role)) {
-      router.push(homePathByRole(user.role))
-      return
-    }
-
+    if (auth.status !== "authenticated") return
+    const user = auth.user
     setNamaCs(user.nama || user.divisi || "CS")
     setCsId(user.id)
-  }, [router])
+  }, [auth.status, auth.user])
 
   function updateArtikel(index: number, patch: Partial<ArtikelForm>) {
     setArtikels((prev) =>
@@ -142,6 +138,8 @@ export default function TambahDesainPage() {
             namaArtikel: a.namaArtikel.trim(),
             spp: a.spp.trim() || undefined,
             catatanDesain: a.catatanDesain.trim() || undefined,
+            perluDtf: a.perluDtf,
+            catatanDtf: a.perluDtf ? a.catatanDtf.trim() || undefined : undefined,
             desainUtama: a.desainUtama,
             logoSponsor: a.logoSponsor,
           })),
@@ -267,6 +265,34 @@ export default function TambahDesainPage() {
                   }
                 />
               </label>
+              <div className="md:col-span-2 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={artikel.perluDtf}
+                    onChange={(e) =>
+                      updateArtikel(index, {
+                        perluDtf: e.target.checked,
+                        catatanDtf: e.target.checked ? artikel.catatanDtf : "",
+                      })
+                    }
+                  />
+                  Perlu DTF
+                </label>
+                {artikel.perluDtf ? (
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-zinc-400">Catatan DTF</span>
+                    <textarea
+                      className="neo-input min-h-[64px]"
+                      value={artikel.catatanDtf}
+                      placeholder="Posisi print, ukuran, warna film, dll."
+                      onChange={(e) =>
+                        updateArtikel(index, { catatanDtf: e.target.value })
+                      }
+                    />
+                  </label>
+                ) : null}
+              </div>
               <label className="block text-sm">
                 <span className="mb-1 block text-zinc-400">Desain utama</span>
                 <input

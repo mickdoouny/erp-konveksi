@@ -14,6 +14,16 @@ export async function GET() {
         OR: [
           { paymentStatus: PaymentStatus.MENUNGGU_DP },
           {
+            AND: [
+              {
+                paymentStatus: {
+                  notIn: [PaymentStatus.LUNAS, PaymentStatus.MENUNGGU_DP],
+                },
+              },
+              { sisaPelunasan: { gt: 0 } },
+            ],
+          },
+          {
             FinalOrder: {
               ProductionPipeline: {
                 is: { shipReleaseStatus: "MENUNGGU_VALIDASI" },

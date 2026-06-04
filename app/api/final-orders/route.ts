@@ -34,6 +34,13 @@ export async function GET(request: Request) {
               },
             },
           }
+        : queue === "dtf_stage"
+          ? {
+              needsDTF: true,
+              ProductionPipeline: {
+                is: { currentStatus: ProductionStatus.DTF },
+              },
+            }
         : queue === "siap_kirim"
           ? {
               ProductionPipeline: {
@@ -51,7 +58,18 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
       include: {
         DesignQueueItem: {
-          select: { sppGroupId: true, designId: true, artikelId: true },
+          select: {
+            sppGroupId: true,
+            designId: true,
+            artikelId: true,
+            id: true,
+            perluDtf: true,
+            statusDtf: true,
+            dtfVendorId: true,
+            fileDtfVendor: true,
+            catatanDtf: true,
+            DtfVendor: { select: { name: true } },
+          },
         },
         AccountingTransaction: true,
         ProductionPipeline: true,

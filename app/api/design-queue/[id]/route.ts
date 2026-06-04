@@ -22,6 +22,8 @@ export async function GET(
       where: { id },
       include: {
         ...designQueueMessagesInclude,
+        DtfVendor: true,
+        DtfPaymentRequest: { orderBy: { requestedAt: "desc" }, take: 5 },
         FinalOrder: {
           select: {
             AccountingTransaction: { select: { paymentStatus: true } },
@@ -144,7 +146,7 @@ export async function PATCH(
         typeof body.fileDesainProduksi === "string"
           ? body.fileDesainProduksi
           : serializeDesignFiles(body.fileDesainProduksi)
-      data.statusDesain = "FILE_DISETUJUI_UPLOADED"
+      data.statusDesain = "MENUNGGU_DP"
     }
 
     if (body.action === "kirim_ke_cs") {

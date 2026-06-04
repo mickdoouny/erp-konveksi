@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import { readStoredUser } from "@/lib/auth";
 import { homePathByRole } from "@/lib/auth-redirect";
 import { isInDesignerQueue } from "@/lib/designer-queue";
 
@@ -44,14 +45,12 @@ export default function DesignsQueuePage() {
   }
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
+    const user = readStoredUser();
 
-    if (!userData) {
-      router.push("/login");
+    if (!user) {
+      router.replace("/login");
       return;
     }
-
-    const user = JSON.parse(userData);
 
     setUserRole(user.role);
 

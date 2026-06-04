@@ -17,27 +17,54 @@ import {
 } from "@/lib/cs-input-order"
 import { createFinalOrderFromDesignQueue } from "@/lib/create-final-order-from-design-queue"
 import { isFinalOrderWorkflowEnabled } from "@/lib/feature-flags"
+import {
+  csOwnsDesignQueueItem,
+  parseCsRequestScope,
+} from "@/lib/cs-design-queue-access"
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params
+    const scope = parseCsRequestScope(request)
 
     const item = await prisma.designQueueItem.findUnique({
       where: { id },
       include: {
         ...designQueueMessagesInclude,
+        DtfVendor: true,
+        DtfPaymentRequest: { orderBy: { requestedAt: "desc" }, take: 5 },
         FinalOrder: {
           select: {
-            AccountingTransaction: { select: { paymentStatus: true } },
+            id: true,
+            orderNumber: true,
+            submittedAt: true,
+            AccountingTransaction: {
+              select: {
+                paymentStatus: true,
+                totalHarga: true,
+                dp: true,
+                sisaPelunasan: true,
+              },
+            },
+            ProductionPipeline: {
+              select: {
+                id: true,
+                productionNumber: true,
+                currentStatus: true,
+                adminProduksiStatus: true,
+                needsDTF: true,
+                dtfCompletedAt: true,
+              },
+            },
           },
         },
       },
     })
 
-    if (!item) {
+    if (!item || !csOwnsDesignQueueItem(scope, item)) {
       return NextResponse.json(
         { message: "Item antrian tidak ditemukan" },
         { status: 404 }
@@ -60,13 +87,14 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params
+    const scope = parseCsRequestScope(request)
     const body = await request.json()
 
     const existing = await prisma.designQueueItem.findUnique({
       where: { id },
     })
 
-    if (!existing) {
+    if (!existing || !csOwnsDesignQueueItem(scope, existing)) {
       return NextResponse.json(
         { message: "Item antrian tidak ditemukan" },
         { status: 404 }
@@ -248,8 +276,9 @@ export async function PATCH(
     }
 
     if (body.action === "revisi") {
-      data.statusDesain = "MENUNGGU"
+      data.statusDesain = "DIKEMBALIKAN_CS"
       data.revisionCount = existing.revisionCount + 1
+      data.returnedToCsAt = null
       if (body.catatanRevisi) {
         const note = String(body.catatanRevisi).trim()
         const prev = existing.materiDesain || ""
@@ -278,7 +307,27 @@ export async function PATCH(
         ...designQueueMessagesInclude,
         FinalOrder: {
           select: {
-            AccountingTransaction: { select: { paymentStatus: true } },
+            id: true,
+            orderNumber: true,
+            submittedAt: true,
+            AccountingTransaction: {
+              select: {
+                paymentStatus: true,
+                totalHarga: true,
+                dp: true,
+                sisaPelunasan: true,
+              },
+            },
+            ProductionPipeline: {
+              select: {
+                id: true,
+                productionNumber: true,
+                currentStatus: true,
+                adminProduksiStatus: true,
+                needsDTF: true,
+                dtfCompletedAt: true,
+              },
+            },
           },
         },
       },

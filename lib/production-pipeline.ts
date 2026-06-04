@@ -6,6 +6,11 @@ import {
   StagePlanStatus,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import {
+  assertDtfProductionGate,
+  markDtfStageCompleted,
+  pipelineNeedsDtfGate,
+} from "@/lib/dtf-service"
 import { PRODUCTION_STATUS_LABELS } from "@/lib/status-labels"
 
 export { PRODUCTION_STATUS_LABELS }
@@ -100,6 +105,9 @@ export async function advancePipelineStage(
 ) {
   const pipeline = await prisma.productionPipeline.findUnique({
     where: { id: pipelineId },
+    include: {
+      FinalOrder: { select: { designQueueItemId: true } },
+    },
   })
 
   if (!pipeline) {
@@ -116,15 +124,30 @@ export async function advancePipelineStage(
     throw new Error("Tidak ada tahap berikutnya")
   }
 
+  if (
+    pipelineNeedsDtfGate(
+      pipeline.currentStatus,
+      target,
+      pipeline.needsDTF
+    )
+  ) {
+    await assertDtfProductionGate(pipeline.FinalOrder.designQueueItemId)
+  }
+
   const now = new Date()
 
-  return prisma.productionPipeline.update({
+  const updated = await prisma.productionPipeline.update({
     where: { id: pipelineId },
     data: {
       currentStatus: target,
       updatedAt: now,
       completedAt:
         target === ProductionStatus.SIAP_KIRIM ? now : pipeline.completedAt,
+      dtfCompletedAt:
+        pipeline.currentStatus === ProductionStatus.DTF &&
+        target === ProductionStatus.PACKING
+          ? now
+          : pipeline.dtfCompletedAt,
       ProductionStatusHistory: {
         create: {
           id: randomUUID(),
@@ -137,6 +160,18 @@ export async function advancePipelineStage(
       },
     },
   })
+
+  if (
+    pipeline.currentStatus === ProductionStatus.DTF &&
+    target === ProductionStatus.PACKING
+  ) {
+    await markDtfStageCompleted(
+      pipelineId,
+      pipeline.FinalOrder.designQueueItemId
+    )
+  }
+
+  return updated
 }
 
 export async function ensureDefaultStagePlans(

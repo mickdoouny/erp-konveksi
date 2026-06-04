@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { AppShell, AppShellLoading } from "@/components/layout/app-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { BtnApprove } from "@/components/ui/buttons"
+import { readStoredUser } from "@/lib/auth"
 import { homePathByRole } from "@/lib/auth-redirect"
 import { canAccessAdminProduksiRoutes } from "@/lib/roles"
 
@@ -37,12 +38,11 @@ export default function AdminSiapKirimPage() {
   }
 
   useEffect(() => {
-    const raw = localStorage.getItem("user")
-    if (!raw) {
-      router.push("/login")
+    const user = readStoredUser()
+    if (!user) {
+      router.replace("/login")
       return
     }
-    const user = JSON.parse(raw)
     if (!canAccessAdminProduksiRoutes(user.role)) {
       router.push(homePathByRole(user.role))
       return

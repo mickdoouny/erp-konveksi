@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import { readStoredUser } from "@/lib/auth";
 import { homePathByRole } from "@/lib/auth-redirect";
 
 type LeadItem = {
@@ -77,14 +78,12 @@ export default function Page() {
   }
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
+    const user = readStoredUser();
 
-    if (!userData) {
-      router.push("/login");
+    if (!user) {
+      router.replace("/login");
       return;
     }
-
-    const user = JSON.parse(userData);
 
     if (!["cs", "owner"].includes(user.role)) {
       router.push(homePathByRole(user.role));

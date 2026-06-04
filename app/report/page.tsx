@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { readStoredUser } from "@/lib/auth"
+import { clearClientSession } from "@/lib/login-session"
 
 export default function ReportPage() {
   const router = useRouter()
@@ -13,19 +15,17 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
+    const user = readStoredUser()
 
-    if (userData) {
-      const user = JSON.parse(userData)
-
+    if (user) {
       setDivisi(user.divisi)
     } else {
-      router.push("/login")
+      router.replace("/login")
     }
   }, [router])
 
   function logout() {
-    localStorage.removeItem("user")
+    clearClientSession()
     router.push("/login")
   }
 

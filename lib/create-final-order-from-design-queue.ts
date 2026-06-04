@@ -58,7 +58,7 @@ export async function createFinalOrderFromDesignQueue(
   const invoiceNumber = generateInvoiceNumber(orderCount + 1)
 
   const needsKancing = Boolean(input.needsKancing)
-  const needsDTF = Boolean(input.needsDTF)
+  const needsDTF = Boolean(input.needsDTF ?? item.perluDtf)
 
   await prisma.$transaction(async (tx) => {
     await tx.finalOrder.create({

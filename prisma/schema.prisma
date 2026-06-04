@@ -94,8 +94,19 @@ model DesignQueueItem {
   sppGroupId           String?
   catatanFinishing     String?
   ongkosKirim          Int?
+  perluDtf             Boolean                 @default(false)
+  catatanDtf           String?
+  statusDtf            DtfStatus               @default(TIDAK_PERLU)
+  fileDtfVendor        String?
+  fileDtfProof         String?
+  dtfVendorId          String?
+  DtfPaymentRequest    DtfPaymentRequest[]
+  DtfVendor            DtfVendor?              @relation(fields: [dtfVendorId], references: [id])
   DesignQueueMessage   DesignQueueMessage[]
   FinalOrder           FinalOrder?
+
+  @@index([perluDtf, statusDtf])
+  @@index([dtfVendorId])
 
   @@index([assignedDesignerId])
   @@index([csId])
@@ -117,6 +128,56 @@ model DesignQueueMessage {
   DesignQueueItem   DesignQueueItem           @relation(fields: [designQueueItemId], references: [id], onDelete: Cascade)
 
   @@index([designQueueItemId, createdAt])
+}
+
+/// Master vendor DTF — dikelola owner/admin, dipilih admin produksi saat order.
+model DtfVendor {
+  id                String              @id
+  name              String
+  contact           String?
+  phone             String?
+  bankAccount       String?
+  notes             String?
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  DesignQueueItem   DesignQueueItem[]
+  DtfPaymentRequest DtfPaymentRequest[]
+
+  @@index([isActive, name])
+}
+
+/// Master operator per divisi/tahap — dikelola owner.
+model Operator {
+  id           String             @id
+  name         String
+  department   OperatorDepartment
+  username     String             @unique
+  passwordHash String
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+
+  @@index([department, isActive, name])
+}
+
+/// Permintaan pembayaran vendor DTF — diajukan admin produksi, disetujui keuangan.
+model DtfPaymentRequest {
+  id                String                   @id
+  designQueueItemId String
+  vendorId          String
+  nominal           Int
+  status            DtfPaymentRequestStatus  @default(MENUNGGU)
+  requestedBy       String
+  requestedAt       DateTime                 @default(now())
+  approvedBy        String?
+  approvedAt        DateTime?
+  buktiBayarUrl     String?
+  notes             String?
+  DesignQueueItem   DesignQueueItem          @relation(fields: [designQueueItemId], references: [id], onDelete: Cascade)
+  DtfVendor         DtfVendor                @relation(fields: [vendorId], references: [id])
+
+  @@index([status, requestedAt])
+  @@index([designQueueItemId])
+  @@index([vendorId])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -574,4 +635,30 @@ enum StagePlanStatus {
   IN_PROGRESS
   COMPLETED
   SKIPPED
+}
+
+enum DtfStatus {
+  TIDAK_PERLU
+  MENUNGGU_ORDER
+  DI_VENDOR
+  MENUNGGU_BAYAR
+  DIBAYAR
+  SIAP_PRODUKSI
+}
+
+enum DtfPaymentRequestStatus {
+  MENUNGGU
+  DISETUJUI
+  DITOLAK
+}
+
+enum OperatorDepartment {
+  SALES
+  DESAINER
+  SETTING
+  LAYOUT
+  PREPARE
+  PRESS
+  JAHIT
+  FINISHING
 }

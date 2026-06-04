@@ -3,16 +3,17 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Sidebar from "@/components/Sidebar"
+import { readStoredUser } from "@/lib/auth"
 
 export default function ProductionProgressPage() {
   const router = useRouter()
   const [progress, setProgress] = useState<any[]>([])
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
+    const user = readStoredUser()
 
-    if (!userData) {
-      router.push("/login")
+    if (!user) {
+      router.replace("/login")
       return
     }
 

@@ -2,15 +2,16 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import CsShell from "@/components/layout/cs-shell"
-import { homePathByRole } from "@/lib/auth-redirect"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
+import { withCsApiScope } from "@/lib/cs-design-queue-access"
 import {
   csAntrianDesainListRowAction,
   labelCsAntrianDesainStatus,
   statusBadgeClass,
   type DesignQueueItemRecord,
 } from "@/lib/cs-antrian-desain"
+import type { AuthUser } from "@/lib/auth"
 
 type AntrianRow = DesignQueueItemRecord & {
   FinalOrder?: {
@@ -19,15 +20,18 @@ type AntrianRow = DesignQueueItemRecord & {
 }
 
 export default function CsAntrianDesainPage() {
-  const router = useRouter()
+  const auth = useAuthGuard({ roles: ["cs", "owner"] })
   const [items, setItems] = useState<AntrianRow[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("")
 
-  async function loadItems() {
+  async function loadItems(user: AuthUser) {
     try {
       setLoading(true)
-      const res = await fetch("/api/cs/antrian-desain", { cache: "no-store" })
+      const res = await fetch(
+        withCsApiScope("/api/cs/antrian-desain", user),
+        { cache: "no-store" }
+      )
       const data = await res.json()
       setItems(Array.isArray(data) ? data : [])
     } catch {
@@ -37,21 +41,26 @@ export default function CsAntrianDesainPage() {
     }
   }
 
+  const sessionUser = auth.status === "authenticated" ? auth.user : null
+
   useEffect(() => {
-    const raw = localStorage.getItem("user")
-    if (!raw) {
-      router.push("/login")
+    if (!sessionUser) {
       return
     }
+    void loadItems(sessionUser)
+  }, [auth.status, sessionUser?.id, sessionUser?.role, sessionUser?.nama])
 
-    const user = JSON.parse(raw)
-    if (!["cs", "owner"].includes(user.role)) {
-      router.push(homePathByRole(user.role))
-      return
-    }
+  if (auth.status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#030304] text-zinc-500">
+        Memuat…
+      </div>
+    )
+  }
 
-    loadItems()
-  }, [router])
+  if (auth.status !== "authenticated") {
+    return null
+  }
 
   const filtered = items.filter((item) => {
     if (!filter.trim()) return true
@@ -86,7 +95,11 @@ export default function CsAntrianDesainPage() {
           />
           <button
             type="button"
-            onClick={loadItems}
+            onClick={() => {
+              if (auth.status === "authenticated") {
+                void loadItems(auth.user)
+              }
+            }}
             className="rounded-lg border border-orange-500/50 bg-orange-950/40 px-4 py-2 text-sm font-semibold text-orange-300 transition hover:border-orange-400"
           >
             Refresh

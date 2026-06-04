@@ -3,14 +3,28 @@
 import { useEffect, useMemo, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import CsFullscreenPage from "@/components/cs/cs-fullscreen-page"
+import { DatePickerInput } from "@/components/ui/date-picker-input"
 import { RupiahInput } from "@/components/ui/rupiah-input"
-import { homePathByRole } from "@/lib/auth-redirect"
+import { readStoredUser } from "@/lib/auth"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
 import type { DesignQueueItemRecord } from "@/lib/cs-antrian-desain"
-import { canCsSubmitInputOrder } from "@/lib/cs-input-order"
+import {
+  CS_JENIS_KERAH_OPTIONS,
+  CS_JENIS_ORDER_OPTIONS,
+  CS_LENGAN_OPTIONS,
+  canCsSubmitInputOrder,
+} from "@/lib/cs-input-order"
+import { isCsAntrianProduksiItem } from "@/lib/cs-antrian-produksi"
 import { formatRupiahDisplay, parseRupiahInput } from "@/lib/format-rupiah"
+import {
+  buildBuktiDpUploadFilename,
+  getFileExtension,
+} from "@/lib/upload-filename"
+import { withCsApiScope } from "@/lib/cs-design-queue-access"
 
 export default function CsInputOrderPage() {
   const router = useRouter()
+  const auth = useAuthGuard({ roles: ["cs", "owner"] })
   const params = useParams()
   const id = params.id as string
 
@@ -65,9 +79,11 @@ export default function CsInputOrderPage() {
       ? formatRupiahDisplay(sisaPelunasan)
       : ""
 
-  async function load() {
+  async function load(user: { role: string; id?: string; nama?: string }) {
     setLoading(true)
-    const res = await fetch(`/api/cs/antrian-desain/${id}`, { cache: "no-store" })
+    const res = await fetch(withCsApiScope(`/api/cs/antrian-desain/${id}`, user), {
+      cache: "no-store",
+    })
     if (!res.ok) {
       setItem(null)
       setLoading(false)
@@ -75,27 +91,32 @@ export default function CsInputOrderPage() {
     }
     const data = await res.json()
     setItem(data)
+    if (data.perluDtf) {
+      setNeedsDTF(true)
+    }
     setLoading(false)
   }
 
   useEffect(() => {
-    const raw = localStorage.getItem("user")
-    if (!raw) {
-      router.push("/login")
-      return
+    if (auth.status !== "authenticated") return
+    load(auth.user)
+  }, [auth.status, auth.user, id])
+
+  useEffect(() => {
+    if (!item || loading) return
+    if (isCsAntrianProduksiItem(item)) {
+      router.replace(`/cs/antrian-produksi/${id}`)
     }
-    const user = JSON.parse(raw)
-    if (!["cs", "owner"].includes(user.role)) {
-      router.push(homePathByRole(user.role))
-      return
-    }
-    load()
-  }, [router, id])
+  }, [item, loading, router, id])
 
   async function uploadBukti(files: FileList | null) {
-    if (!files?.length) return
+    if (!files?.length || !item) return
+    const file = files[0]
+    const ext = getFileExtension(file.name) || "jpg"
+    const saveAs = buildBuktiDpUploadFilename(item.artikelId, ext)
     const formData = new FormData()
-    formData.append("files", files[0])
+    formData.append("files", file)
+    formData.append("saveAs", saveAs)
     const res = await fetch("/api/upload", { method: "POST", body: formData })
     const json = await res.json()
     if (res.ok && json.files?.[0]?.url) {
@@ -124,9 +145,11 @@ export default function CsInputOrderPage() {
 
     setSaving(true)
     try {
-      const raw = localStorage.getItem("user")
-      const user = raw ? JSON.parse(raw) : {}
-      const res = await fetch(`/api/cs/antrian-desain/${id}`, {
+      const user = readStoredUser()
+      if (!user) return
+      const res = await fetch(
+        withCsApiScope(`/api/cs/antrian-desain/${id}`, user),
+        {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -147,13 +170,14 @@ export default function CsInputOrderPage() {
           needsDTF,
           buktiDp,
         }),
-      })
+        }
+      )
       const json = await res.json()
       if (!res.ok) {
         alert(json.message ?? "Gagal menyimpan order")
         return
       }
-      router.replace("/cs/antrian-desain")
+      router.replace(`/cs/antrian-produksi/${id}`)
     } finally {
       setSaving(false)
     }
@@ -186,6 +210,8 @@ export default function CsInputOrderPage() {
   }
 
   const readOnlyClass = "neo-input mt-1 bg-zinc-900/80"
+  const selectClass =
+    "neo-input mt-1 cursor-pointer py-2.5 text-sm [color-scheme:dark]"
 
   return (
     <CsFullscreenPage
@@ -220,11 +246,18 @@ export default function CsInputOrderPage() {
         <div className="neo-card grid gap-4 p-5 md:grid-cols-2">
           <label className="block text-sm">
             <span className="text-zinc-400">Jenis order</span>
-            <input
-              className="neo-input mt-1"
+            <select
+              className={selectClass}
               value={jenisOrder}
               onChange={(e) => setJenisOrder(e.target.value)}
-            />
+            >
+              <option value="">Pilih jenis order</option>
+              {CS_JENIS_ORDER_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block text-sm">
             <span className="text-zinc-400">Bahan</span>
@@ -236,19 +269,33 @@ export default function CsInputOrderPage() {
           </label>
           <label className="block text-sm">
             <span className="text-zinc-400">Jenis kerah</span>
-            <input
-              className="neo-input mt-1"
+            <select
+              className={selectClass}
               value={jenisKerah}
               onChange={(e) => setJenisKerah(e.target.value)}
-            />
+            >
+              <option value="">Pilih jenis kerah</option>
+              {CS_JENIS_KERAH_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block text-sm">
             <span className="text-zinc-400">Lengan</span>
-            <input
-              className="neo-input mt-1"
+            <select
+              className={selectClass}
               value={lengan}
               onChange={(e) => setLengan(e.target.value)}
-            />
+            >
+              <option value="">Pilih lengan</option>
+              {CS_LENGAN_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block text-sm">
             <span className="text-zinc-400">Harga satuan (Rp)</span>
@@ -311,15 +358,16 @@ export default function CsInputOrderPage() {
           </label>
           <label className="block text-sm">
             <span className="text-zinc-400">Deadline</span>
-            <input
-              type="date"
-              className="neo-input mt-1"
+            <DatePickerInput
               value={tanggalDeadline}
-              onChange={(e) => setTanggalDeadline(e.target.value)}
+              onChange={setTanggalDeadline}
             />
           </label>
           <label className="block text-sm md:col-span-2">
             <span className="text-zinc-400">Bukti DP</span>
+            <p className="mt-1 text-xs text-zinc-500">
+              {`File disimpan sebagai ${item.artikelId}-bukti-dp.{ekstensi}`}
+            </p>
             <input
               type="file"
               accept="image/*"

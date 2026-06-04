@@ -2,23 +2,24 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import DesignPreviewPair from "@/components/cs/design-preview-pair"
+import { DtfWorkflowPanel, type DtfItemState } from "@/components/dtf/dtf-panels"
 import { AppShell, AppShellLoading } from "@/components/layout/app-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { validateCdrFilename } from "@/lib/cdr-filename"
-import { homePathByRole } from "@/lib/auth-redirect"
-import { canAccessDesainerRoutes } from "@/lib/roles"
+import { buildCdrUploadFilename } from "@/lib/upload-filename"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
 import {
   serializeDesignFiles,
   type DesignQueueItemRecord,
 } from "@/lib/cs-antrian-desain"
 
 export default function DesainerAntrianDisetujuiDetailPage() {
-  const router = useRouter()
+  const auth = useAuthGuard({ roles: ["desainer", "owner"] })
   const params = useParams()
   const id = params.id as string
-  const [item, setItem] = useState<DesignQueueItemRecord | null>(null)
+  const [item, setItem] = useState<(DesignQueueItemRecord & DtfItemState) | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,18 +37,17 @@ export default function DesainerAntrianDisetujuiDetailPage() {
   }
 
   useEffect(() => {
-    const raw = localStorage.getItem("user")
-    if (!raw) {
-      router.push("/login")
-      return
-    }
-    const user = JSON.parse(raw)
-    if (!canAccessDesainerRoutes(user.role)) {
-      router.push(homePathByRole(user.role))
-      return
-    }
+    if (auth.status !== "authenticated") return
     load()
-  }, [router, id])
+  }, [auth.status, id])
+
+  if (auth.status === "loading") {
+    return (
+      <AppShell>
+        <AppShellLoading />
+      </AppShell>
+    )
+  }
 
   async function uploadCdr(file: File | null) {
     if (!file || !item) return
@@ -61,6 +61,7 @@ export default function DesainerAntrianDisetujuiDetailPage() {
     try {
       const formData = new FormData()
       formData.append("files", file)
+      formData.append("saveAs", buildCdrUploadFilename(item.artikelId))
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData })
       const uploadJson = await uploadRes.json()
       if (!uploadRes.ok) {
@@ -109,6 +110,8 @@ export default function DesainerAntrianDisetujuiDetailPage() {
       <div className="mb-6">
         <DesignPreviewPair item={item} />
       </div>
+
+      <DtfWorkflowPanel item={item} onUpdated={(next) => setItem((prev) => (prev ? { ...prev, ...next } : prev))} />
 
       <div className="neo-card space-y-4 p-5">
         <p className="text-sm text-zinc-400">

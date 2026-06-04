@@ -6,6 +6,7 @@ import {
   SppPrintDocument,
   type PrintableSppDocument,
 } from "@/components/admin/spp-print-document"
+import { readStoredUser } from "@/lib/auth"
 import { homePathByRole } from "@/lib/auth-redirect"
 import { canAccessAdminProduksiRoutes } from "@/lib/roles"
 import { labelPaymentStatus, labelProductionStatus } from "@/lib/status-labels"
@@ -43,12 +44,11 @@ export default function FinalOrderPrintPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null)
 
   useEffect(() => {
-    const raw = localStorage.getItem("user")
-    if (!raw) {
-      router.push("/login")
+    const user = readStoredUser()
+    if (!user) {
+      router.replace("/login")
       return
     }
-    const user = JSON.parse(raw)
     if (!canAccessAdminProduksiRoutes(user.role)) {
       router.push(homePathByRole(user.role))
       return

@@ -2,6 +2,8 @@ import {
   AdminProduksiStatus,
   DesignQueueNoteSenderRole,
   DesignQueueStatusDesain,
+  DtfPaymentRequestStatus,
+  DtfStatus,
   PaymentStatus,
   ProductionStatus,
   ShipReleaseStatus,
@@ -12,7 +14,12 @@ import {
   DESIGNER_APPROVED_STATUSES,
 } from "@/lib/designer-antrian"
 import { hasProductionDesignFile } from "@/lib/cs-antrian-desain"
+import {
+  formatDpPercentage,
+  isDpBelowThreshold,
+} from "@/lib/cs-input-order"
 import { isFinalOrderWorkflowEnabled } from "@/lib/feature-flags"
+import { formatRupiahDisplay } from "@/lib/format-rupiah"
 
 export type NotificationCategory =
   | "cs_action"
@@ -21,7 +28,10 @@ export type NotificationCategory =
   | "desainer_disetujui"
   | "desainer_message"
   | "keuangan_validasi"
+  | "keuangan_dtf"
   | "produksi_antrian"
+  | "produksi_dtf_jahit"
+  | "owner_dp_rendah"
 
 export type NotificationItem = {
   id: string
@@ -46,6 +56,7 @@ const CS_ACTION_STATUSES: DesignQueueStatusDesain[] = [
   "SELESAI",
   "SUDAH_DI_DESAIN",
   "MENUNGGU_DP",
+  "FILE_DISETUJUI_UPLOADED",
 ]
 
 function csActionLabel(status: DesignQueueStatusDesain, hasCdr: boolean): string {
@@ -56,6 +67,7 @@ function csActionLabel(status: DesignQueueStatusDesain, hasCdr: boolean): string
     case "MENUNGGU_ACC_KONSUMEN":
       return "Hasil desain siap ACC konsumen"
     case "MENUNGGU_DP":
+    case "FILE_DISETUJUI_UPLOADED":
       return hasCdr ? "Siap input order" : "Menunggu CDR produksi"
     case "SELESAI":
     case "SUDAH_DI_DESAIN":
@@ -79,6 +91,7 @@ function designerKerjaLabel(status: DesignQueueStatusDesain): string {
 
 function designerDisetujuiLabel(status: DesignQueueStatusDesain): string {
   if (status === "MENUNGGU_DP") return "Unggah file CDR produksi"
+  if (status === "FILE_DISETUJUI_UPLOADED") return "CDR diunggah — menunggu CS input order"
   if (status === "DISETUJUI_CS") return "Unggah CDR — order disetujui CS"
   return "Antrian disetujui — perlu CDR"
 }
@@ -107,7 +120,13 @@ export async function fetchNotificationsForRole(
 
     for (const row of csItems) {
       const hasCdr = hasProductionDesignFile(row)
-      if (row.statusDesain === "MENUNGGU_DP" && !hasCdr) continue
+      if (
+        (row.statusDesain === "MENUNGGU_DP" ||
+          row.statusDesain === "FILE_DISETUJUI_UPLOADED") &&
+        !hasCdr
+      ) {
+        continue
+      }
 
       items.push({
         id: `cs-action-${row.id}`,
@@ -287,6 +306,33 @@ export async function fetchNotificationsForRole(
         occurredAt: tx.updatedAt.toISOString(),
       })
     }
+
+    const pendingDtf = await prisma.dtfPaymentRequest.findMany({
+      where: { status: DtfPaymentRequestStatus.MENUNGGU },
+      orderBy: { requestedAt: "desc" },
+      take: 15,
+      include: {
+        DesignQueueItem: {
+          select: {
+            artikelId: true,
+            namaKonsumen: true,
+            namaArtikel: true,
+          },
+        },
+        DtfVendor: { select: { name: true } },
+      },
+    })
+
+    for (const req of pendingDtf) {
+      items.push({
+        id: `keu-dtf-${req.id}`,
+        category: "keuangan_dtf",
+        title: "Pembayaran DTF menunggu persetujuan",
+        description: `${req.DesignQueueItem.artikelId} · ${req.DtfVendor.name} · Rp ${req.nominal.toLocaleString("id-ID")}`,
+        href: "/admin/keuangan",
+        occurredAt: req.requestedAt.toISOString(),
+      })
+    }
   }
 
   if (
@@ -326,6 +372,82 @@ export async function fetchNotificationsForRole(
         occurredAt: order.createdAt.toISOString(),
       })
     }
+
+    const jahitDtfOrders = await prisma.finalOrder.findMany({
+      where: {
+        needsDTF: true,
+        ProductionPipeline: {
+          is: { currentStatus: ProductionStatus.JAHIT },
+        },
+        DesignQueueItem: {
+          is: {
+            perluDtf: true,
+            fileDtfVendor: { not: null },
+            statusDtf: DtfStatus.MENUNGGU_ORDER,
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 15,
+      include: {
+        DesignQueueItem: { select: { artikelId: true } },
+      },
+    })
+
+    for (const order of jahitDtfOrders) {
+      items.push({
+        id: `prod-dtf-jahit-${order.id}`,
+        category: "produksi_dtf_jahit",
+        title: "Order DTF siap di Jahit",
+        description: `${order.orderNumber} · ${order.DesignQueueItem?.artikelId ?? "—"} · ${order.namaKonsumen}`,
+        href: "/admin/final-orders",
+        occurredAt: order.updatedAt.toISOString(),
+      })
+    }
+  }
+
+  if (role === "owner" && isFinalOrderWorkflowEnabled()) {
+    const pendingLowDp = await prisma.finalOrder.findMany({
+      where: {
+        totalHarga: { gt: 0 },
+        AccountingTransaction: {
+          is: { paymentStatus: PaymentStatus.MENUNGGU_DP },
+        },
+      },
+      orderBy: { submittedAt: "desc" },
+      take: 30,
+      select: {
+        id: true,
+        orderNumber: true,
+        namaKonsumen: true,
+        totalHarga: true,
+        dp: true,
+        submittedAt: true,
+        createdAt: true,
+        DesignQueueItem: {
+          select: { designId: true, artikelId: true },
+        },
+      },
+    })
+
+    for (const order of pendingLowDp) {
+      if (!isDpBelowThreshold(order.dp, order.totalHarga)) continue
+
+      const dsn = order.DesignQueueItem?.designId ?? order.orderNumber
+      const art = order.DesignQueueItem?.artikelId ?? "—"
+      const pct = formatDpPercentage(order.dp, order.totalHarga)
+      const dpFormatted = formatRupiahDisplay(order.dp)
+      const totalFormatted = formatRupiahDisplay(order.totalHarga)
+
+      items.push({
+        id: `owner-dp-rendah-${order.id}`,
+        category: "owner_dp_rendah",
+        title: "DP di bawah 20%",
+        description: `${dsn} · ${art} · ${order.namaKonsumen} — DP Rp ${dpFormatted} (${pct}% dari total Rp ${totalFormatted})`,
+        href: "/admin/keuangan",
+        occurredAt: (order.submittedAt ?? order.createdAt).toISOString(),
+      })
+    }
   }
 
   items.sort(
@@ -349,8 +471,13 @@ export const CATEGORY_CLEAR_PATHS: Record<
   NotificationCategory,
   (pathname: string) => boolean
 > = {
-  cs_action: (p) => p === "/cs/antrian-desain" || p.startsWith("/cs/antrian-desain/"),
-  cs_message: (p) => p.startsWith("/cs/antrian-desain/"),
+  cs_action: (p) =>
+    p === "/cs/antrian-desain" ||
+    p.startsWith("/cs/antrian-desain/") ||
+    p === "/cs/antrian-produksi" ||
+    p.startsWith("/cs/antrian-produksi/"),
+  cs_message: (p) =>
+    p.startsWith("/cs/antrian-desain/") || p.startsWith("/cs/antrian-produksi/"),
   desainer_kerja: (p) =>
     p === "/desainer/antrian" || p.startsWith("/desainer/antrian/"),
   desainer_disetujui: (p) =>
@@ -358,7 +485,11 @@ export const CATEGORY_CLEAR_PATHS: Record<
     p.startsWith("/desainer/antrian-disetujui/"),
   desainer_message: (p) => p.startsWith("/desainer/antrian/"),
   keuangan_validasi: (p) => p.startsWith("/admin/keuangan"),
+  keuangan_dtf: (p) => p.startsWith("/admin/keuangan"),
   produksi_antrian: (p) => p.startsWith("/admin/final-orders"),
+  produksi_dtf_jahit: (p) => p.startsWith("/admin/final-orders"),
+  owner_dp_rendah: (p) =>
+    p === "/owner" || p.startsWith("/admin/keuangan"),
 }
 
 export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
@@ -368,5 +499,8 @@ export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   desainer_disetujui: "Antrian disetujui",
   desainer_message: "Pesan CS",
   keuangan_validasi: "Validasi keuangan",
+  keuangan_dtf: "Pembayaran DTF",
   produksi_antrian: "Antrian produksi",
+  produksi_dtf_jahit: "Order DTF Jahit",
+  owner_dp_rendah: "DP rendah",
 }

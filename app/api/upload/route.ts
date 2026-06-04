@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { sanitizeUploadFilename } from "@/lib/upload-filename";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,12 @@ export async function POST(request: Request) {
       });
     }
 
+    const saveAsRaw = formData.get("saveAs");
+    const saveAs =
+      typeof saveAsRaw === "string" && saveAsRaw.trim()
+        ? sanitizeUploadFilename(saveAsRaw)
+        : null;
+
     const uploadedFiles = [];
 
     for (const file of files) {
@@ -48,10 +55,9 @@ export async function POST(request: Request) {
       const buffer =
         Buffer.from(bytes);
 
-      const filename = `${Date.now()}-${file.name.replace(
-        /\s/g,
-        "-"
-      )}`;
+      const filename =
+        saveAs ??
+        `${Date.now()}-${file.name.replace(/\s/g, "-")}`;
 
       const filepath =
         path.join(
@@ -65,7 +71,7 @@ export async function POST(request: Request) {
       );
 
       uploadedFiles.push({
-        name: file.name,
+        name: filename,
         url: `/uploads/${filename}`,
       });
     }
