@@ -1,8 +1,4 @@
-import {
-  authenticateUser,
-  isDemoUsername,
-  type AuthUser,
-} from "@/lib/auth"
+import { authenticateUser, type AuthUser } from "@/lib/auth"
 import { authenticateOperator } from "@/lib/operator-auth"
 
 export type LoginSuccess = { ok: true; user: AuthUser }
@@ -37,14 +33,6 @@ export async function resolveLogin(
   const defaultUser = authenticateUser(trimmedUsername, password)
   if (defaultUser) {
     return { ok: true, user: defaultUser }
-  }
-
-  if (isDemoUsername(trimmedUsername)) {
-    return {
-      ok: false,
-      error: "Username atau password salah",
-      status: 401,
-    }
   }
 
   try {

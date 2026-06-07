@@ -7,10 +7,11 @@ import {
   generateArtikelId,
   generateDesignId,
   generateSppGroupId,
-  parseCsAntrianDesainBody,
   serializeDesignFiles,
+  validateCsAntrianDesainBody,
   type CreateDesignBatchInput,
 } from "@/lib/cs-antrian-desain"
+import { findKonsumenByNormalizedPhone } from "@/lib/konsumen-phone-lookup"
 import { isCsAntrianDesainItem } from "@/lib/cs-antrian-produksi"
 import {
   csDesignQueueOwnershipWhere,
@@ -50,11 +51,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateDesignBatchInput
-    const parsed = parseCsAntrianDesainBody(body)
+    const parsed = validateCsAntrianDesainBody(body)
 
     if (!parsed.ok) {
-      return NextResponse.json({ message: parsed.message }, { status: 400 })
+      return NextResponse.json(
+        { message: parsed.message, errors: parsed.errors },
+        { status: 400 }
+      )
     }
+
+    const { data } = parsed
+    const existingKonsumen = await findKonsumenByNormalizedPhone(data.telepon)
 
     const artikelCount = await prisma.designQueueItem.count()
     const designGroups = await prisma.designQueueItem.groupBy({
@@ -67,7 +74,7 @@ export async function POST(request: Request) {
     const now = new Date()
 
     const created = await prisma.$transaction(
-      body.artikels.map((artikel, index) => {
+      data.artikels.map((artikel, index) => {
         const artikelId = generateArtikelId(artikelCount + index + 1)
 
         return prisma.designQueueItem.create({
@@ -78,9 +85,10 @@ export async function POST(request: Request) {
             sppGroupId,
             csNama,
             csId: body.csId || null,
-            namaKonsumen: body.namaKonsumen.trim(),
-            noTelepon: body.telepon.trim(),
-            alamatPengiriman: body.alamat.trim(),
+            namaKonsumen: data.namaKonsumen,
+            noTelepon: data.telepon,
+            noTeleponNormalized: data.noTeleponNormalized,
+            alamatPengiriman: data.alamat,
             namaArtikel: artikel.namaArtikel.trim(),
             sppNumber: artikel.spp?.trim() || null,
             materiDesain: artikel.catatanDesain?.trim() || null,
@@ -102,7 +110,19 @@ export async function POST(request: Request) {
       })
     )
 
-    return NextResponse.json(created, { status: 201 })
+    return NextResponse.json(
+      {
+        items: created,
+        konsumenMatch: existingKonsumen
+          ? {
+              matched: true,
+              namaKonsumen: existingKonsumen.namaKonsumen,
+              noTelepon: existingKonsumen.noTelepon,
+            }
+          : { matched: false },
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("POST CS ANTRIAN DESAIN:", error)
     return NextResponse.json(

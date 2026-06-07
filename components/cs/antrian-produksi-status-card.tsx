@@ -1,14 +1,13 @@
 "use client"
 
 import {
-  csAntrianProduksiDtfSummary,
   csAntrianProduksiProgressLabel,
   csProduksiProgressBadgeClass,
   type CsAntrianProduksiFinalOrder,
 } from "@/lib/cs-antrian-produksi"
 import { labelPaymentStatus } from "@/lib/status-labels"
-import { dtfStatusBadgeClass } from "@/lib/dtf-status-labels"
 import type { DesignQueueItemRecord } from "@/lib/cs-antrian-desain"
+import { JenisProduksiBadge } from "@/components/production/jenis-produksi-badge"
 
 type AntrianProduksiStatusCardProps = {
   item: DesignQueueItemRecord & {
@@ -21,7 +20,9 @@ export function AntrianProduksiStatusCard({ item }: AntrianProduksiStatusCardPro
   const payment =
     item.FinalOrder?.AccountingTransaction?.paymentStatus ?? null
   const pipeline = item.FinalOrder?.ProductionPipeline
-  const dtfLabel = csAntrianProduksiDtfSummary(item)
+  const jenisProduksi = item.FinalOrder?.jenisProduksi ?? item.jenisProduksi
+  const expressPriority =
+    item.FinalOrder?.expressPriority ?? item.expressPriority
 
   return (
     <div className="neo-card p-5 md:p-6">
@@ -40,6 +41,12 @@ export function AntrianProduksiStatusCard({ item }: AntrianProduksiStatusCardPro
           {progress.secondary ? (
             <p className="mt-2 text-sm text-zinc-400">{progress.secondary}</p>
           ) : null}
+          <div className="mt-3">
+            <JenisProduksiBadge
+              jenisProduksi={jenisProduksi}
+              expressPriority={expressPriority}
+            />
+          </div>
         </div>
         <div className="text-right text-xs text-zinc-500">
           {item.FinalOrder?.orderNumber ? (
@@ -75,18 +82,6 @@ export function AntrianProduksiStatusCard({ item }: AntrianProduksiStatusCardPro
             </dd>
           ) : null}
         </div>
-        {dtfLabel ? (
-          <div>
-            <dt className="text-xs text-zinc-500">DTF</dt>
-            <dd className="mt-1">
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${dtfStatusBadgeClass(item.statusDtf ?? "")}`}
-              >
-                {dtfLabel}
-              </span>
-            </dd>
-          </div>
-        ) : null}
         <div>
           <dt className="text-xs text-zinc-500">Konsumen</dt>
           <dd className="mt-1 font-medium text-zinc-100">{item.namaKonsumen}</dd>

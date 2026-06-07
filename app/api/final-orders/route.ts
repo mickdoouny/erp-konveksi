@@ -8,6 +8,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { isFinalOrderWorkflowEnabled } from "@/lib/feature-flags"
+import { sortProductionQueue } from "@/lib/production-queue-sort"
 
 export async function GET(request: Request) {
   try {
@@ -34,6 +35,15 @@ export async function GET(request: Request) {
               },
             },
           }
+        : queue === "post_jahit"
+          ? {
+              ProductionPipeline: {
+                is: {
+                  currentStatus: ProductionStatus.ADMIN_PRODUKSI,
+                  adminProduksiStatus: AdminProduksiStatus.APPROVED,
+                },
+              },
+            }
         : queue === "dtf_stage"
           ? {
               needsDTF: true,
@@ -77,7 +87,9 @@ export async function GET(request: Request) {
       },
     })
 
-    return NextResponse.json({ success: true, data: items, workflowEnabled: true })
+    const sorted = sortProductionQueue(items)
+
+    return NextResponse.json({ success: true, data: sorted, workflowEnabled: true })
   } catch (error) {
     console.error("GET FINAL ORDERS:", error)
     return NextResponse.json(

@@ -18,6 +18,21 @@ export const DESIGNER_CAN_SEND_TO_CS_STATUSES: DesignQueueStatusDesain[] = [
   "SUDAH_DI_DESAIN",
 ]
 
+/** Status di mana desainer boleh mengunggah / mengganti / menghapus hasil desain. */
+export const DESIGNER_CAN_UPLOAD_HASIL_STATUSES: DesignQueueStatusDesain[] = [
+  ...DESIGNER_ACTIVE_STATUSES,
+  "MENUNGGU_ACC_KONSUMEN",
+  "SUDAH_DI_DESAIN",
+]
+
+/** Status terkunci — desain sudah disetujui atau selesai (CDR / produksi). */
+export const DESIGNER_UPLOAD_LOCKED_STATUSES: DesignQueueStatusDesain[] = [
+  "SELESAI",
+  "DISETUJUI_CS",
+  "MENUNGGU_DP",
+  "FILE_DISETUJUI_UPLOADED",
+]
+
 /** Antrian pasca-ACC / menunggu DP — unggah CDR produksi. */
 export const DESIGNER_APPROVED_STATUSES: DesignQueueStatusDesain[] = [
   "MENUNGGU_DP",
@@ -50,23 +65,26 @@ export function canDesignerKirimKeCs(
 /** Status di mana desainer boleh mengunggah / mengganti hasil desain. */
 export function canDesignerUploadHasilDesain(status: string): boolean {
   const key = status.trim().toUpperCase() as DesignQueueStatusDesain
-  if (isDesignerActiveStatus(key)) return true
-  return key === "SUDAH_DI_DESAIN"
+  return DESIGNER_CAN_UPLOAD_HASIL_STATUSES.includes(key)
 }
 
-type DesignerUploadContext = {
+export type DesignerUploadContext = {
   returnedToCsAt?: string | Date | null
   messages?: { senderRole: string; createdAt: string | Date }[]
 }
 
-/** Izinkan unggah ulang saat menunggu ACC jika CS sudah kirim pesan setelah hasil dikirim. */
+/** Sama dengan canDesignerUploadHasilDesain — context disimpan untuk kompatibilitas UI. */
 export function canDesignerUploadHasilDesainWithContext(
   status: string,
+  _context?: DesignerUploadContext
+): boolean {
+  return canDesignerUploadHasilDesain(status)
+}
+
+/** CS mengirim catatan setelah desainer kirim ke CS (hint revisi di UI). */
+export function hasCsRevisionNoteAfterSend(
   context?: DesignerUploadContext
 ): boolean {
-  if (canDesignerUploadHasilDesain(status)) return true
-  if (!isDesignerAwaitingCsAcc(status)) return false
-
   const csMessages = (context?.messages ?? []).filter(
     (message) => message.senderRole.toUpperCase() === "CS"
   )
@@ -90,4 +108,21 @@ export function isDesignerAwaitingCsAcc(status: string): boolean {
 export function isDesignerRevisionRequested(status: string): boolean {
   const key = status.trim().toUpperCase() as DesignQueueStatusDesain
   return key === "DIKEMBALIKAN_CS" || key === "SUDAH_DI_REVISI"
+}
+
+/** Pesan untuk UI saat unggah hasil desain tidak diizinkan. */
+export function designerUploadBlockedReason(
+  status: string,
+  context?: DesignerUploadContext
+): string | undefined {
+  if (canDesignerUploadHasilDesainWithContext(status, context)) return undefined
+
+  const key = status.trim().toUpperCase() as DesignQueueStatusDesain
+  if (key === "SELESAI") {
+    return "Unggah tidak tersedia — desain sudah selesai."
+  }
+  if (DESIGNER_UPLOAD_LOCKED_STATUSES.includes(key)) {
+    return "Unggah hasil desain terkunci — desain sudah disetujui. Unggah file CDR di antrian disetujui."
+  }
+  return "Unggah hasil desain tidak tersedia pada status ini."
 }

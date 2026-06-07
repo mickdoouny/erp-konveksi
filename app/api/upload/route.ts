@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
       const filename =
         saveAs ??
-        `${Date.now()}-${file.name.replace(/\s/g, "-")}`;
+        `${Date.now()}-${sanitizeUploadFilename(file.name) || "file"}`;
 
       const filepath =
         path.join(

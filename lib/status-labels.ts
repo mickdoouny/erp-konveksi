@@ -1,11 +1,15 @@
-import { PaymentStatus, ProductionStatus } from "@prisma/client"
-
 export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   MENUNGGU_DP: "Menunggu DP",
   DP_TERIMA: "DP diterima",
   SEBAGIAN: "Sebagian",
   LUNAS: "Lunas",
   DP_DIKECUALIKAN: "DP dikecualikan",
+}
+
+export const ADMIN_PRODUKSI_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Menunggu setujuan",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
 }
 
 export const PRODUCTION_STATUS_LABELS: Record<string, string> = {
@@ -37,9 +41,14 @@ export function labelProductionStatus(status: string): string {
   )
 }
 
-export function isDpValidatedPaymentStatus(status: string): boolean {
-  const key = status.trim().toUpperCase()
-  return key !== "" && key !== PaymentStatus.MENUNGGU_DP
+export function labelAdminProduksiStatus(status: string): string {
+  return (
+    ADMIN_PRODUKSI_STATUS_LABELS[status] ??
+    status.replace(/_/g, " ").toLowerCase()
+  )
 }
 
-export { ProductionStatus, PaymentStatus }
+export function isDpValidatedPaymentStatus(status: string): boolean {
+  const key = status.trim().toUpperCase()
+  return key !== "" && key !== "MENUNGGU_DP"
+}

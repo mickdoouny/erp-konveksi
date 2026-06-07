@@ -5,23 +5,10 @@ import {
   ProductionStatus,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { isDtfPaymentApprovedForProduction } from "@/lib/dtf-status-labels"
 
-export async function assertDtfProductionGate(designQueueItemId: string | null) {
-  if (!designQueueItemId) return
-
-  const item = await prisma.designQueueItem.findUnique({
-    where: { id: designQueueItemId },
-    select: { perluDtf: true, statusDtf: true, artikelId: true },
-  })
-
-  if (!item?.perluDtf) return
-
-  if (!isDtfPaymentApprovedForProduction(item.statusDtf)) {
-    throw new Error(
-      `Pembayaran DTF vendor belum disetujui Keuangan (${item.artikelId}). Produksi hanya bisa ambil film setelah pembayaran approved.`
-    )
-  }
+/** DTF workflow disabled — perluDtf is SPP note only. */
+export async function assertDtfProductionGate(_designQueueItemId: string | null) {
+  return
 }
 
 export async function assignDtfVendor(
@@ -277,15 +264,11 @@ export async function markDtfStageCompleted(
   })
 }
 
+/** DTF workflow disabled — no pipeline gates. */
 export function pipelineNeedsDtfGate(
-  currentStatus: ProductionStatus,
-  targetStatus: ProductionStatus,
-  needsDTF: boolean
+  _currentStatus: ProductionStatus,
+  _targetStatus: ProductionStatus,
+  _needsDTF: boolean
 ): boolean {
-  if (!needsDTF) return false
-  return (
-    targetStatus === ProductionStatus.DTF ||
-    (currentStatus === ProductionStatus.DTF &&
-      targetStatus === ProductionStatus.PACKING)
-  )
+  return false
 }

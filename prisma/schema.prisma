@@ -81,11 +81,14 @@ model DesignQueueItem {
   jenisOrder           String?
   lengan               String?
   noTelepon            String?
+  noTeleponNormalized  String?
   readyForAdmin        Boolean                 @default(false)
   sisaPelunasan        Int?
   sppNumber            String?
   tanggalBayarDp       DateTime?
   tanggalDeadline      DateTime?
+  jenisProduksi        JenisProduksi           @default(REGULER)
+  expressPriority      Int?
   totalOrder           Int?
   revisionCount        Int                     @default(0)
   buktiDp              String?
@@ -110,8 +113,10 @@ model DesignQueueItem {
 
   @@index([assignedDesignerId])
   @@index([csId])
+  @@index([noTeleponNormalized])
   @@index([designId])
   @@index([prioritas, createdAt])
+  @@index([jenisProduksi, expressPriority])
   @@index([readyForAdmin])
   @@index([sppGroupId])
   @@index([statusDesain])
@@ -200,6 +205,8 @@ model FinalOrder {
   jenisLengan           String?
   qty                   Int
   deadline              DateTime?
+  jenisProduksi         JenisProduksi          @default(REGULER)
+  expressPriority       Int?
   needsKancing          Boolean                @default(false)
   needsDTF              Boolean                @default(false)
   fileDesainFinal       String?
@@ -207,6 +214,9 @@ model FinalOrder {
   catatanProduksi       String?
   catatanCs             String?
   hargaSatuan           Int?
+  hargaStelan           Int?
+  hargaAtasan           Int?
+  hargaBawahan          Int?
   totalHarga            Int
   dp                    Int                    @default(0)
   sisaPelunasan         Int
@@ -225,8 +235,10 @@ model FinalOrder {
   DesignQueueItem       DesignQueueItem?       @relation(fields: [designQueueItemId], references: [id])
   FinalOrderRosterLine  FinalOrderRosterLine[]
   ProductionPipeline    ProductionPipeline?
+  JahitPaymentRecord    JahitPaymentRecord[]
 
   @@index([createdAt])
+  @@index([jenisProduksi, expressPriority])
   @@index([deliveryStatus])
   @@index([namaCs])
   @@index([needsKancing, needsDTF])
@@ -242,6 +254,12 @@ model FinalOrderRosterLine {
   nomorPunggung String?
   ukuran        String?
   catatan       String?
+  jenisItem     String?
+  jenisKerah    String?
+  lengan        String?
+  bahan         String?
+  warna         String?
+  grup          String?
   sortOrder     Int        @default(0)
   FinalOrder    FinalOrder @relation(fields: [finalOrderId], references: [id], onDelete: Cascade)
 
@@ -426,6 +444,7 @@ model ProductionPipeline {
   FinalOrder                   FinalOrder                     @relation(fields: [finalOrderId], references: [id], onDelete: Cascade)
   ProductionStagePlan          ProductionStagePlan[]
   ProductionStatusHistory      ProductionStatusHistory[]
+  JahitPaymentRecord           JahitPaymentRecord[]
 
   @@index([adminProduksiStatus])
   @@index([completedAt])
@@ -493,6 +512,24 @@ model ProductionStatusHistory {
   @@index([toStatus, createdAt])
 }
 
+/// Rekam selesai jahit untuk pengajuan pembayaran (closing Sabtu).
+model JahitPaymentRecord {
+  id                   String             @id
+  productionPipelineId String
+  finalOrderId         String
+  orderNumber          String
+  qty                  Int
+  operatorId           String?
+  operatorName         String
+  completedAt          DateTime           @default(now())
+  FinalOrder           FinalOrder         @relation(fields: [finalOrderId], references: [id], onDelete: Cascade)
+  ProductionPipeline   ProductionPipeline @relation(fields: [productionPipelineId], references: [id], onDelete: Cascade)
+
+  @@index([completedAt])
+  @@index([finalOrderId])
+  @@index([productionPipelineId])
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model Report {
   id         String   @id
@@ -549,6 +586,11 @@ enum DesignQueueNoteSenderRole {
 }
 
 enum DesignQueuePrioritas {
+  REGULER
+  EXPRESS
+}
+
+enum JenisProduksi {
   REGULER
   EXPRESS
 }

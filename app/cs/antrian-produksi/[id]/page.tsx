@@ -6,7 +6,6 @@ import { useParams, useRouter } from "next/navigation"
 import { AntrianProduksiStatusCard } from "@/components/cs/antrian-produksi-status-card"
 import DesignPreviewPair from "@/components/cs/design-preview-pair"
 import { DesignQueueNotesSection } from "@/components/cs/design-queue-notes-section"
-import { DtfStatusReadonlyPanel } from "@/components/dtf/dtf-panels"
 import CsShell from "@/components/layout/cs-shell"
 import { readStoredUser } from "@/lib/auth"
 import { homePathByRole } from "@/lib/auth-redirect"
@@ -16,7 +15,7 @@ import {
   type CsAntrianProduksiFinalOrder,
 } from "@/lib/cs-antrian-produksi"
 import type { DesignQueueMessageRecord } from "@/lib/design-queue-notes"
-import { withCsApiScope } from "@/lib/cs-design-queue-access"
+import { withCsApiScope } from "@/lib/cs-api-scope"
 
 type DetailItem = DesignQueueItemRecord & {
   messages?: DesignQueueMessageRecord[]
@@ -116,8 +115,6 @@ export default function CsAntrianProduksiDetailPage() {
       }
     >
       <AntrianProduksiStatusCard item={item} />
-
-      <DtfStatusReadonlyPanel item={item} />
 
       <div className="my-6">
         <DesignPreviewPair item={item} />

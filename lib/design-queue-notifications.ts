@@ -2,13 +2,18 @@ import {
   AdminProduksiStatus,
   DesignQueueNoteSenderRole,
   DesignQueueStatusDesain,
-  DtfPaymentRequestStatus,
-  DtfStatus,
   PaymentStatus,
   ProductionStatus,
   ShipReleaseStatus,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import {
+  CATEGORY_CLEAR_PATHS,
+  CATEGORY_LABELS,
+  type NotificationCategory,
+  type NotificationItem,
+  type NotificationPayload,
+} from "@/lib/design-queue-notifications-shared"
 import {
   DESIGNER_ACTIVE_STATUSES,
   DESIGNER_APPROVED_STATUSES,
@@ -21,33 +26,15 @@ import {
 import { isFinalOrderWorkflowEnabled } from "@/lib/feature-flags"
 import { formatRupiahDisplay } from "@/lib/format-rupiah"
 
-export type NotificationCategory =
-  | "cs_action"
-  | "cs_message"
-  | "desainer_kerja"
-  | "desainer_disetujui"
-  | "desainer_message"
-  | "keuangan_validasi"
-  | "keuangan_dtf"
-  | "produksi_antrian"
-  | "produksi_dtf_jahit"
-  | "owner_dp_rendah"
-
-export type NotificationItem = {
-  id: string
-  category: NotificationCategory
-  title: string
-  description: string
-  href: string
-  occurredAt: string
-}
-
-export type NotificationPayload = {
-  items: NotificationItem[]
-  total: number
-  byCategory: Partial<Record<NotificationCategory, number>>
-  polledAt: string
-}
+export type {
+  NotificationCategory,
+  NotificationItem,
+  NotificationPayload,
+} from "@/lib/design-queue-notifications-shared"
+export {
+  CATEGORY_CLEAR_PATHS,
+  CATEGORY_LABELS,
+} from "@/lib/design-queue-notifications-shared"
 
 const CS_ACTION_STATUSES: DesignQueueStatusDesain[] = [
   "DIKEMBALIKAN_CS",
@@ -306,33 +293,6 @@ export async function fetchNotificationsForRole(
         occurredAt: tx.updatedAt.toISOString(),
       })
     }
-
-    const pendingDtf = await prisma.dtfPaymentRequest.findMany({
-      where: { status: DtfPaymentRequestStatus.MENUNGGU },
-      orderBy: { requestedAt: "desc" },
-      take: 15,
-      include: {
-        DesignQueueItem: {
-          select: {
-            artikelId: true,
-            namaKonsumen: true,
-            namaArtikel: true,
-          },
-        },
-        DtfVendor: { select: { name: true } },
-      },
-    })
-
-    for (const req of pendingDtf) {
-      items.push({
-        id: `keu-dtf-${req.id}`,
-        category: "keuangan_dtf",
-        title: "Pembayaran DTF menunggu persetujuan",
-        description: `${req.DesignQueueItem.artikelId} · ${req.DtfVendor.name} · Rp ${req.nominal.toLocaleString("id-ID")}`,
-        href: "/admin/keuangan",
-        occurredAt: req.requestedAt.toISOString(),
-      })
-    }
   }
 
   if (
@@ -370,38 +330,6 @@ export async function fetchNotificationsForRole(
         description: `${order.orderNumber} · ${order.namaKonsumen} — ${order.namaArtikel}`,
         href: "/admin/final-orders",
         occurredAt: order.createdAt.toISOString(),
-      })
-    }
-
-    const jahitDtfOrders = await prisma.finalOrder.findMany({
-      where: {
-        needsDTF: true,
-        ProductionPipeline: {
-          is: { currentStatus: ProductionStatus.JAHIT },
-        },
-        DesignQueueItem: {
-          is: {
-            perluDtf: true,
-            fileDtfVendor: { not: null },
-            statusDtf: DtfStatus.MENUNGGU_ORDER,
-          },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 15,
-      include: {
-        DesignQueueItem: { select: { artikelId: true } },
-      },
-    })
-
-    for (const order of jahitDtfOrders) {
-      items.push({
-        id: `prod-dtf-jahit-${order.id}`,
-        category: "produksi_dtf_jahit",
-        title: "Order DTF siap di Jahit",
-        description: `${order.orderNumber} · ${order.DesignQueueItem?.artikelId ?? "—"} · ${order.namaKonsumen}`,
-        href: "/admin/final-orders",
-        occurredAt: order.updatedAt.toISOString(),
       })
     }
   }
@@ -465,42 +393,4 @@ export async function fetchNotificationsForRole(
     byCategory,
     polledAt,
   }
-}
-
-export const CATEGORY_CLEAR_PATHS: Record<
-  NotificationCategory,
-  (pathname: string) => boolean
-> = {
-  cs_action: (p) =>
-    p === "/cs/antrian-desain" ||
-    p.startsWith("/cs/antrian-desain/") ||
-    p === "/cs/antrian-produksi" ||
-    p.startsWith("/cs/antrian-produksi/"),
-  cs_message: (p) =>
-    p.startsWith("/cs/antrian-desain/") || p.startsWith("/cs/antrian-produksi/"),
-  desainer_kerja: (p) =>
-    p === "/desainer/antrian" || p.startsWith("/desainer/antrian/"),
-  desainer_disetujui: (p) =>
-    p === "/desainer/antrian-disetujui" ||
-    p.startsWith("/desainer/antrian-disetujui/"),
-  desainer_message: (p) => p.startsWith("/desainer/antrian/"),
-  keuangan_validasi: (p) => p.startsWith("/admin/keuangan"),
-  keuangan_dtf: (p) => p.startsWith("/admin/keuangan"),
-  produksi_antrian: (p) => p.startsWith("/admin/final-orders"),
-  produksi_dtf_jahit: (p) => p.startsWith("/admin/final-orders"),
-  owner_dp_rendah: (p) =>
-    p === "/owner" || p.startsWith("/admin/keuangan"),
-}
-
-export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
-  cs_action: "Antrian desain",
-  cs_message: "Pesan desainer",
-  desainer_kerja: "Antrian kerja",
-  desainer_disetujui: "Antrian disetujui",
-  desainer_message: "Pesan CS",
-  keuangan_validasi: "Validasi keuangan",
-  keuangan_dtf: "Pembayaran DTF",
-  produksi_antrian: "Antrian produksi",
-  produksi_dtf_jahit: "Order DTF Jahit",
-  owner_dp_rendah: "DP rendah",
 }

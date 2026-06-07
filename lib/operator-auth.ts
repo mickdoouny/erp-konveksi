@@ -18,6 +18,9 @@ const PRODUCTION_DEPARTMENTS: OperatorDepartment[] = [
 export function roleForOperatorDepartment(
   department: OperatorDepartment
 ): string {
+  if (department === "SALES") {
+    return "cs"
+  }
   if (department === "DESAINER") {
     return "desainer"
   }
@@ -47,14 +50,14 @@ export async function authenticateOperator(
   username: string,
   password: string
 ): Promise<AuthUser | null> {
-  const normalizedUsername = username.trim()
+  const normalizedUsername = username.trim().toLowerCase()
   if (!normalizedUsername || !password) {
     return null
   }
 
   const operator = await prisma.operator.findFirst({
     where: {
-      username: normalizedUsername,
+      username: { equals: normalizedUsername, mode: "insensitive" },
       isActive: true,
     },
   })

@@ -8,11 +8,14 @@ import { BtnApprove } from "@/components/ui/buttons"
 import { readStoredUser } from "@/lib/auth"
 import { homePathByRole } from "@/lib/auth-redirect"
 import { canAccessAdminProduksiRoutes } from "@/lib/roles"
+import { JenisProduksiBadge } from "@/components/production/jenis-produksi-badge"
 
 type Row = {
   id: string
   orderNumber: string
   namaKonsumen: string
+  jenisProduksi?: string
+  expressPriority?: number | null
   ProductionPipeline: {
     id: string
     productionNumber: string
@@ -73,6 +76,12 @@ export default function AdminSiapKirimPage() {
                 <p className="text-sm text-zinc-400">
                   {row.orderNumber} · {row.ProductionPipeline.productionNumber}
                 </p>
+                <div className="mt-2">
+                  <JenisProduksiBadge
+                    jenisProduksi={row.jenisProduksi}
+                    expressPriority={row.expressPriority}
+                  />
+                </div>
               </div>
               <BtnApprove
                 disabled={busyId === row.ProductionPipeline.id}

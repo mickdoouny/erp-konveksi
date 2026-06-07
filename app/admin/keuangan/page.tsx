@@ -1,24 +1,21 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { AppShell, AppShellLoading } from "@/components/layout/app-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { BtnApprove, BtnGhost, BtnPrimary, BtnRevisi } from "@/components/ui/buttons"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { RupiahInput } from "@/components/ui/rupiah-input"
-import { useAuthGuard } from "@/hooks/use-auth-guard"
+import { authenticatedUser, useAuthGuard } from "@/hooks/use-auth-guard"
+import { isDesignImageUrl } from "@/lib/cs-antrian-desain"
+import { openImageInNewTab } from "@/lib/image-viewer"
 import { labelPaymentStatus } from "@/lib/status-labels"
 import { formatRupiahDisplay, parseRupiahInput } from "@/lib/format-rupiah"
 import {
-  buildBuktiDtfVendorUploadFilename,
   buildBuktiPelunasanUploadFilename,
   getFileExtension,
 } from "@/lib/upload-filename"
-import {
-  dtfStatusBadgeClass,
-  labelDtfStatus,
-} from "@/lib/dtf-status-labels"
+import { JenisProduksiBadge } from "@/components/production/jenis-produksi-badge"
 
 type AccountingRow = {
   id: string
@@ -33,7 +30,12 @@ type AccountingRow = {
     orderNumber: string
     namaKonsumen: string
     namaArtikel: string
-    DesignQueueItem?: { artikelId: string } | null
+    namaCs?: string
+    submittedByName?: string | null
+    submittedAt?: string | null
+    jenisProduksi?: string
+    expressPriority?: number | null
+    DesignQueueItem?: { artikelId: string; csNama?: string } | null
     ProductionPipeline?: {
       id: string
       shipReleaseStatus: string
@@ -42,33 +44,61 @@ type AccountingRow = {
   }
 }
 
-type DtfPaymentRow = {
-  id: string
-  nominal: number
-  status: string
-  requestedAt: string
-  requestedBy: string
-  DtfVendor: { name: string; bankAccount?: string | null }
-  DesignQueueItem: {
-    id: string
-    artikelId: string
-    designId: string
-    namaKonsumen: string
-    namaArtikel: string
-    statusDtf: string
-  }
+function resolveCsName(row: AccountingRow): string {
+  return (
+    row.FinalOrder.namaCs?.trim() ||
+    row.FinalOrder.DesignQueueItem?.csNama?.trim() ||
+    "—"
+  )
+}
+
+function BuktiDpPreview({ url, artikelId }: { url: string; artikelId?: string }) {
+  const label = artikelId ? `${artikelId} — bukti DP` : "Bukti DP"
+  const isImage = isDesignImageUrl(url)
+
+  return (
+    <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+        Bukti transfer DP
+      </p>
+      {isImage ? (
+        <button
+          type="button"
+          className="mt-2 block overflow-hidden rounded-lg border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
+          onClick={() => openImageInNewTab(url, label)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={label}
+            className="max-h-40 w-full object-contain bg-zinc-950"
+          />
+        </button>
+      ) : null}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <BtnGhost type="button" onClick={() => openImageInNewTab(url, label)}>
+          {isImage ? "Buka gambar penuh" : "Lihat bukti DP"}
+        </BtnGhost>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center text-xs text-zinc-400 underline hover:text-zinc-200"
+        >
+          Unduh / buka file
+        </a>
+      </div>
+    </div>
+  )
 }
 
 export default function AdminKeuanganPage() {
   const auth = useAuthGuard({ roles: ["admin_keuangan", "owner"] })
+  const sessionUser = authenticatedUser(auth)
   const [items, setItems] = useState<AccountingRow[]>([])
-  const [dtfPayments, setDtfPayments] = useState<DtfPaymentRow[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState("")
-  const [dtfBusyId, setDtfBusyId] = useState("")
   const [actorName, setActorName] = useState("Admin Keuangan")
-  const [dtfBuktiByRequest, setDtfBuktiByRequest] = useState<Record<string, string>>({})
-  const [uploadingDtfBukti, setUploadingDtfBukti] = useState("")
   const [pelunasanRow, setPelunasanRow] = useState<AccountingRow | null>(null)
   const [pelunasanAmount, setPelunasanAmount] = useState("")
   const [buktiPelunasan, setBuktiPelunasan] = useState<string | null>(null)
@@ -77,27 +107,21 @@ export default function AdminKeuanganPage() {
   async function load() {
     setLoading(true)
     try {
-      const [accRes, dtfRes] = await Promise.all([
-        fetch("/api/accounting", { cache: "no-store" }),
-        fetch("/api/dtf-payment-requests?status=MENUNGGU", { cache: "no-store" }),
-      ])
+      const accRes = await fetch("/api/accounting", { cache: "no-store" })
       const json = await accRes.json()
-      const dtfJson = await dtfRes.json()
       setItems(json.success ? json.data : [])
-      setDtfPayments(Array.isArray(dtfJson) ? dtfJson : [])
     } catch {
       setItems([])
-      setDtfPayments([])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (auth.status !== "authenticated") return
-    setActorName(auth.user.nama ?? "Admin Keuangan")
+    if (!sessionUser) return
+    setActorName(sessionUser.nama ?? "Admin Keuangan")
     load()
-  }, [auth.status, auth.user])
+  }, [auth.status, sessionUser])
 
   async function patchAccounting(id: string, body: Record<string, unknown>) {
     setBusyId(id)
@@ -117,62 +141,6 @@ export default function AdminKeuanganPage() {
       alert("Gagal memperbarui transaksi")
     } finally {
       setBusyId("")
-    }
-  }
-
-  async function uploadDtfBukti(
-    requestId: string,
-    artikelId: string,
-    files: FileList | null
-  ) {
-    if (!files?.length) return
-    const file = files[0]
-    const ext = getFileExtension(file.name) || "jpg"
-    const saveAs = buildBuktiDtfVendorUploadFilename(artikelId, ext)
-    setUploadingDtfBukti(requestId)
-    try {
-      const formData = new FormData()
-      formData.append("files", file)
-      formData.append("saveAs", saveAs)
-      const res = await fetch("/api/upload", { method: "POST", body: formData })
-      const json = await res.json()
-      if (res.ok && json.files?.[0]?.url) {
-        setDtfBuktiByRequest((prev) => ({
-          ...prev,
-          [requestId]: json.files[0].url,
-        }))
-      } else {
-        alert(json.message ?? "Gagal upload bukti bayar DTF")
-      }
-    } catch {
-      alert("Gagal upload bukti bayar DTF")
-    } finally {
-      setUploadingDtfBukti("")
-    }
-  }
-
-  async function patchDtfPayment(requestId: string, action: "approve" | "reject") {
-    setDtfBusyId(requestId)
-    try {
-      const res = await fetch(`/api/dtf-payment-requests/${requestId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          actorName,
-          buktiBayarUrl: dtfBuktiByRequest[requestId],
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        alert(json.message ?? "Gagal memproses pembayaran DTF")
-        return
-      }
-      await load()
-    } catch {
-      alert("Gagal memproses pembayaran DTF")
-    } finally {
-      setDtfBusyId("")
     }
   }
 
@@ -228,7 +196,7 @@ export default function AdminKeuanganPage() {
         badge="Keuangan"
         title="Admin"
         titleAccent="Keuangan"
-        description="Validasi DP, catat pelunasan, dan permintaan izin kirim."
+        description="Validasi bukti DP dari CS, catat pelunasan, dan setujui permintaan izin kirim."
       />
 
       {loading ? (
@@ -236,142 +204,105 @@ export default function AdminKeuanganPage() {
       ) : (
         <div className="space-y-8">
           <section className="neo-card p-5">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-white">
-                Antrian pembayaran DTF
-              </h2>
-              <Link
-                href="/admin/dtf-vendors"
-                className="text-sm text-orange-400 hover:text-orange-300"
-              >
-                Kelola vendor DTF →
-              </Link>
-            </div>
-            {dtfPayments.length === 0 ? (
-              <p className="text-sm text-zinc-500">
-                Tidak ada permintaan pembayaran DTF menunggu persetujuan.
+            <h2 className="text-lg font-semibold text-white">
+              Antrian validasi DP
+            </h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              Cek bukti transfer ke rekening perusahaan. Bandingkan nominal DP
+              dengan mutasi rekening. Jika sudah sesuai, klik{" "}
+              <span className="text-zinc-200">Setujui DP · Lanjut produksi</span>{" "}
+              — order akan masuk antrian Admin Produksi.
+            </p>
+            {dpQueue.length === 0 ? (
+              <p className="mt-4 text-sm text-zinc-500">
+                Tidak ada DP menunggu validasi.
               </p>
             ) : (
-              <div className="space-y-4">
-                {dtfPayments.map((row) => (
-                  <div
-                    key={row.id}
-                    className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-white">
-                          {row.DesignQueueItem.namaKonsumen}
-                        </p>
-                        <p className="text-sm text-zinc-400">
-                          {row.DesignQueueItem.artikelId} ·{" "}
-                          {row.DesignQueueItem.namaArtikel}
-                        </p>
-                        <p className="mt-2 text-sm text-zinc-300">
-                          Vendor: {row.DtfVendor.name} · Rp{" "}
-                          {row.nominal.toLocaleString("id-ID")}
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                          Diajukan {row.requestedBy} ·{" "}
-                          {new Date(row.requestedAt).toLocaleString("id-ID")}
-                        </p>
-                        <span
-                          className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${dtfStatusBadgeClass(row.DesignQueueItem.statusDtf)}`}
-                        >
-                          {labelDtfStatus(row.DesignQueueItem.statusDtf)}
-                        </span>
-                      </div>
-                      <div className="min-w-[220px]">
-                        <label className="block text-sm">
-                          <span className="text-zinc-400">Bukti bayar vendor</span>
-                          <p className="mt-1 text-xs text-zinc-500">
-                            {`${row.DesignQueueItem.artikelId}-bukti-dtf-vendor.{ekstensi}`}
+              <div className="mt-4 space-y-4">
+                {dpQueue.map((row) => {
+                  const csName = resolveCsName(row)
+                  const artikelId = row.FinalOrder.DesignQueueItem?.artikelId
+                  return (
+                    <div
+                      key={row.id}
+                      className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-white">
+                            {row.FinalOrder.namaKonsumen}
                           </p>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={uploadingDtfBukti === row.id}
-                            className="neo-input mt-1"
-                            onChange={(e) =>
-                              uploadDtfBukti(
-                                row.id,
-                                row.DesignQueueItem.artikelId,
-                                e.target.files
-                              )
-                            }
-                          />
-                          {dtfBuktiByRequest[row.id] ? (
-                            <p className="mt-1 text-xs text-emerald-400">
-                              Bukti tersimpan.
+                          <p className="text-sm text-zinc-400">
+                            {row.FinalOrder.orderNumber} ·{" "}
+                            {row.FinalOrder.namaArtikel}
+                            {artikelId ? ` · ${artikelId}` : ""}
+                          </p>
+                          <div className="mt-2">
+                            <JenisProduksiBadge
+                              jenisProduksi={row.FinalOrder.jenisProduksi}
+                              expressPriority={row.FinalOrder.expressPriority}
+                            />
+                          </div>
+                          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+                            <div>
+                              <dt className="text-zinc-500">Nominal DP</dt>
+                              <dd className="font-medium text-emerald-300">
+                                Rp {formatRupiahDisplay(row.dp)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-zinc-500">Total order</dt>
+                              <dd className="font-medium text-zinc-200">
+                                Rp {formatRupiahDisplay(row.totalHarga)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-zinc-500">Sisa pelunasan</dt>
+                              <dd className="font-medium text-amber-200">
+                                Rp {formatRupiahDisplay(row.sisaPelunasan)}
+                              </dd>
+                            </div>
+                          </dl>
+                          <p className="mt-3 text-sm text-zinc-400">
+                            CS pengaju:{" "}
+                            <span className="text-zinc-200">{csName}</span>
+                            {row.FinalOrder.submittedByName &&
+                            row.FinalOrder.submittedByName !== csName ? (
+                              <span className="text-zinc-500">
+                                {" "}
+                                · disimpan oleh {row.FinalOrder.submittedByName}
+                              </span>
+                            ) : null}
+                          </p>
+                          <div className="mt-2">
+                            <StatusBadge status={row.paymentStatus} />
+                          </div>
+                          {row.buktiDp?.trim() ? (
+                            <BuktiDpPreview
+                              url={row.buktiDp.trim()}
+                              artikelId={artikelId}
+                            />
+                          ) : (
+                            <p className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
+                              Bukti DP belum diunggah CS. Minta CS melampirkan
+                              bukti transfer sebelum disetujui.
                             </p>
-                          ) : null}
-                        </label>
-                        <div className="mt-3 flex flex-wrap gap-2">
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-col gap-2 sm:items-end">
                           <BtnApprove
-                            disabled={
-                              dtfBusyId === row.id ||
-                              uploadingDtfBukti === row.id ||
-                              !dtfBuktiByRequest[row.id]
+                            disabled={busyId === row.id}
+                            onClick={() =>
+                              patchAccounting(row.id, { action: "approve_dp" })
                             }
-                            onClick={() => patchDtfPayment(row.id, "approve")}
                           >
-                            Setujui bayar
+                            Setujui DP · Lanjut produksi
                           </BtnApprove>
-                          <BtnRevisi
-                            disabled={dtfBusyId === row.id}
-                            onClick={() => patchDtfPayment(row.id, "reject")}
-                          >
-                            Tolak
-                          </BtnRevisi>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="neo-card p-5">
-            <h2 className="mb-4 text-lg font-semibold text-white">
-              Antrian validasi DP
-            </h2>
-            {dpQueue.length === 0 ? (
-              <p className="text-sm text-zinc-500">Tidak ada DP menunggu validasi.</p>
-            ) : (
-              <div className="space-y-4">
-                {dpQueue.map((row) => (
-                  <div
-                    key={row.id}
-                    className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-white">
-                          {row.FinalOrder.namaKonsumen}
-                        </p>
-                        <p className="text-sm text-zinc-400">
-                          {row.FinalOrder.orderNumber} · {row.FinalOrder.namaArtikel}
-                        </p>
-                        <p className="mt-2 text-sm text-zinc-300">
-                          DP Rp {row.dp.toLocaleString("id-ID")} · Total Rp{" "}
-                          {row.totalHarga.toLocaleString("id-ID")}
-                        </p>
-                        <StatusBadge status={row.paymentStatus} />
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <BtnApprove
-                          disabled={busyId === row.id}
-                          onClick={() =>
-                            patchAccounting(row.id, { action: "approve_dp" })
-                          }
-                        >
-                          Validasi DP
-                        </BtnApprove>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </section>
@@ -398,6 +329,12 @@ export default function AdminKeuanganPage() {
                       {row.FinalOrder.orderNumber} · Sisa Rp{" "}
                       {formatRupiahDisplay(row.sisaPelunasan)}
                     </p>
+                    <div className="mt-2">
+                      <JenisProduksiBadge
+                        jenisProduksi={row.FinalOrder.jenisProduksi}
+                        expressPriority={row.FinalOrder.expressPriority}
+                      />
+                    </div>
                     <div className="mt-3">
                       <BtnGhost
                         disabled={busyId === row.id}
@@ -436,6 +373,12 @@ export default function AdminKeuanganPage() {
                         {row.FinalOrder.namaKonsumen} · Status pembayaran:{" "}
                         {labelPaymentStatus(row.paymentStatus)}
                       </p>
+                      <div className="mt-2">
+                        <JenisProduksiBadge
+                          jenisProduksi={row.FinalOrder.jenisProduksi}
+                          expressPriority={row.FinalOrder.expressPriority}
+                        />
+                      </div>
                       <div className="mt-3 flex gap-2">
                         <BtnApprove
                           disabled={busyId === row.id}

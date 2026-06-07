@@ -35,10 +35,19 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       include: {
         FinalOrder: {
-          include: {
+          select: {
+            id: true,
+            orderNumber: true,
+            namaKonsumen: true,
+            namaArtikel: true,
+            namaCs: true,
+            submittedByName: true,
+            submittedAt: true,
+            jenisProduksi: true,
+            expressPriority: true,
             ProductionPipeline: true,
             DesignQueueItem: {
-              select: { artikelId: true, designId: true },
+              select: { artikelId: true, designId: true, csNama: true },
             },
           },
         },

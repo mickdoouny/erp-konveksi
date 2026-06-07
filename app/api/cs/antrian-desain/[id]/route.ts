@@ -1,20 +1,28 @@
 import { NextResponse } from "next/server"
 import type { DesignQueueStatusDesain } from "@prisma/client"
-import { prisma } from "@/lib/prisma"
+import { prisma, HEAVY_TRANSACTION_OPTIONS } from "@/lib/prisma"
+import { apiErrorMessage } from "@/lib/api-error-message"
 import {
   canCsEditKonsumen,
   parseCsEditKonsumenBody,
   serializeDesignFiles,
 } from "@/lib/cs-antrian-desain"
+import { normalizeIndonesianPhone } from "@/lib/phone-normalize"
 import {
   attachDesignQueueMessages,
   designQueueMessagesInclude,
 } from "@/lib/design-queue-notes"
 import {
   canCsSubmitInputOrder,
+  calculateOrderTotalFromInput,
+  nextExpressPriority,
   parseCsInputOrderBody,
+  parseJenisProduksi,
+  resolveExpressPriorityFields,
   resolveLockedKonsumenFields,
+  validateCsInputOrderForSubmit,
 } from "@/lib/cs-input-order"
+import { validateExcelRosterForSubmit } from "@/lib/excel-roster-parse"
 import { createFinalOrderFromDesignQueue } from "@/lib/create-final-order-from-design-queue"
 import { isFinalOrderWorkflowEnabled } from "@/lib/feature-flags"
 import {
@@ -41,6 +49,9 @@ export async function GET(
             id: true,
             orderNumber: true,
             submittedAt: true,
+            jenisProduksi: true,
+            expressPriority: true,
+            deadline: true,
             AccountingTransaction: {
               select: {
                 paymentStatus: true,
@@ -143,6 +154,7 @@ export async function PATCH(
         data: {
           namaKonsumen: parsed.data.namaKonsumen,
           noTelepon: parsed.data.noTelepon,
+          noTeleponNormalized: parsed.data.noTeleponNormalized,
           alamatPengiriman: parsed.data.alamatPengiriman,
           updatedAt: new Date(),
         },
@@ -179,6 +191,31 @@ export async function PATCH(
       }
 
       const input = parseCsInputOrderBody(body)
+      const inputCheck = validateCsInputOrderForSubmit(input)
+      if (!inputCheck.ok) {
+        return NextResponse.json({ message: inputCheck.message }, { status: 400 })
+      }
+
+      const rosterCheck = validateExcelRosterForSubmit(
+        input.rosterLines ?? [],
+        input.totalOrder
+      )
+      if (!rosterCheck.ok) {
+        return NextResponse.json(
+          { message: rosterCheck.errors?.join(" ") ?? "Roster tidak valid." },
+          { status: 400 }
+        )
+      }
+
+      const { totalHarga: computedTotal, qty: computedQty } =
+        calculateOrderTotalFromInput(input)
+      if (computedQty <= 0 || computedTotal <= 0) {
+        return NextResponse.json(
+          { message: "Lengkapi harga per jenis dan daftar item roster." },
+          { status: 400 }
+        )
+      }
+
       const locked = resolveLockedKonsumenFields(existing)
 
       const actor = {
@@ -190,36 +227,47 @@ export async function PATCH(
       if (isFinalOrderWorkflowEnabled()) {
         await createFinalOrderFromDesignQueue(existing, input, actor)
       } else {
-        const qty = input.totalOrder ?? 0
-        const hargaSatuan = input.hargaSatuan ?? 0
-        const ongkir = input.ongkosKirim ?? 0
-        const total = qty * hargaSatuan + ongkir
+        const { totalHarga: total, qty } = calculateOrderTotalFromInput(input)
         const dp = input.dpAmount ?? 0
+        const jenisProduksi = parseJenisProduksi(input.jenisProduksi)
 
-        await prisma.designQueueItem.update({
-          where: { id },
-          data: {
-            ...locked,
-            statusDesain: "DISETUJUI_CS",
-            readyForAdmin: true,
-            approvedAt: new Date(),
-            jenisOrder: input.jenisOrder,
-            jenisBahan: input.jenisBahan,
-            jenisKerah: input.jenisKerah,
-            lengan: input.lengan,
-            totalOrder: qty,
-            hargaSatuan,
-            dpAmount: dp,
-            sisaPelunasan: Math.max(0, total - dp),
-            ongkosKirim: ongkir,
-            tanggalDeadline: input.tanggalDeadline
-              ? new Date(input.tanggalDeadline)
-              : null,
-            buktiDp: input.buktiDp,
-            catatanFinishing: input.catatanFinishing,
-            updatedAt: new Date(),
-          },
-        })
+        await prisma.$transaction(async (tx) => {
+          const expressPriority =
+            jenisProduksi === "EXPRESS"
+              ? await nextExpressPriority(tx, "designQueueItem")
+              : null
+          const productionFields = resolveExpressPriorityFields(
+            jenisProduksi,
+            expressPriority
+          )
+
+          await tx.designQueueItem.update({
+            where: { id },
+            data: {
+              ...locked,
+              statusDesain: "DISETUJUI_CS",
+              readyForAdmin: true,
+              approvedAt: new Date(),
+              jenisOrder: input.jenisOrder,
+              jenisBahan: input.jenisBahan,
+              jenisKerah: input.jenisKerah,
+              lengan: input.lengan,
+              totalOrder: qty,
+              hargaSatuan: input.hargaSatuan,
+              dpAmount: dp,
+              sisaPelunasan: Math.max(0, total - dp),
+              ongkosKirim: input.ongkosKirim ?? 0,
+              tanggalDeadline: input.tanggalDeadline
+                ? new Date(input.tanggalDeadline)
+                : null,
+              jenisProduksi: productionFields.jenisProduksi,
+              expressPriority: productionFields.expressPriority,
+              buktiDp: input.buktiDp,
+              catatanFinishing: input.catatanFinishing,
+              updatedAt: new Date(),
+            },
+          })
+        }, HEAVY_TRANSACTION_OPTIONS)
       }
 
       const updated = await prisma.designQueueItem.findUnique({
@@ -244,6 +292,7 @@ export async function PATCH(
       materiDesain?: string | null
       namaKonsumen?: string
       noTelepon?: string | null
+      noTeleponNormalized?: string | null
       alamatPengiriman?: string | null
       hasilDesain?: string | null
       returnedToCsAt?: Date | null
@@ -310,6 +359,9 @@ export async function PATCH(
             id: true,
             orderNumber: true,
             submittedAt: true,
+            jenisProduksi: true,
+            expressPriority: true,
+            deadline: true,
             AccountingTransaction: {
               select: {
                 paymentStatus: true,
@@ -337,7 +389,9 @@ export async function PATCH(
   } catch (error) {
     console.error("PATCH CS ANTRIAN ITEM:", error)
     return NextResponse.json(
-      { message: "Gagal memperbarui antrian desain" },
+      {
+        message: apiErrorMessage(error, "Gagal memperbarui antrian desain"),
+      },
       { status: 500 }
     )
   }

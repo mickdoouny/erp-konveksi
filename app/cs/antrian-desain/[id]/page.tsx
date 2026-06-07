@@ -7,7 +7,6 @@ import { AntrianDesainDetailStatusCard } from "@/components/cs/antrian-desain-de
 import DesignPreviewPair from "@/components/cs/design-preview-pair"
 import { DesignQueueNotesSection } from "@/components/cs/design-queue-notes-section"
 import { EditKonsumenModal } from "@/components/cs/edit-konsumen-modal"
-import { DtfStatusReadonlyPanel } from "@/components/dtf/dtf-panels"
 import CsShell from "@/components/layout/cs-shell"
 import { BtnPrimary, BtnRevisi } from "@/components/ui/buttons"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
@@ -19,7 +18,7 @@ import {
 } from "@/lib/cs-antrian-desain"
 import { isCsAntrianProduksiItem } from "@/lib/cs-antrian-produksi"
 import type { DesignQueueMessageRecord } from "@/lib/design-queue-notes"
-import { withCsApiScope } from "@/lib/cs-design-queue-access"
+import { withCsApiScope } from "@/lib/cs-api-scope"
 
 type DetailItem = DesignQueueItemRecord & {
   messages?: DesignQueueMessageRecord[]
@@ -241,8 +240,6 @@ export default function CsAntrianDesainDetailPage() {
           })
         }
       />
-
-      <DtfStatusReadonlyPanel item={item} />
 
       <div className="my-6">
         <DesignPreviewPair item={item} />

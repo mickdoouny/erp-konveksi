@@ -2,7 +2,7 @@ import type {
   NotificationCategory,
   NotificationItem,
   NotificationPayload,
-} from "@/lib/design-queue-notifications"
+} from "@/lib/design-queue-notifications-shared"
 
 export type { NotificationCategory, NotificationItem, NotificationPayload }
 

@@ -7,7 +7,6 @@ import { DesignQueueListFilters } from "@/components/design-queue/list-filters"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
 import type { DesignQueueItemRecord } from "@/lib/cs-antrian-desain"
 import {
-  csAntrianProduksiDtfSummary,
   csAntrianProduksiProgressLabel,
   csProduksiProgressBadgeClass,
   type CsAntrianProduksiFinalOrder,
@@ -20,11 +19,19 @@ import {
   type CsProduksiFilterState,
 } from "@/lib/design-queue-filters"
 import { PAYMENT_STATUS_LABELS, PRODUCTION_STATUS_LABELS } from "@/lib/status-labels"
-import { DTF_STATUS_LABELS } from "@/lib/dtf-status-labels"
-import { withCsApiScope } from "@/lib/cs-design-queue-access"
+import { withCsApiScope } from "@/lib/cs-api-scope"
+import { DeadlineWarningBadge } from "@/components/production/deadline-warning-badge"
+import { JenisProduksiBadge } from "@/components/production/jenis-produksi-badge"
+import {
+  formatDateIdShort,
+  getDeadlineWarning,
+  resolveOrderEntryDate,
+} from "@/lib/deadline-warning"
 
 type ProduksiRow = DesignQueueItemRecord & {
   FinalOrder?: CsAntrianProduksiFinalOrder | null
+  jenisProduksi?: string
+  expressPriority?: number | null
 }
 
 const PRODUKSI_PAYMENT_OPTIONS = [
@@ -45,13 +52,6 @@ const PRODUKSI_PIPELINE_OPTIONS = [
     value,
     label,
   })),
-]
-
-const PRODUKSI_DTF_OPTIONS = [
-  { value: "", label: "Semua DTF" },
-  { value: "perlu", label: "Perlu DTF" },
-  { value: "tidak", label: "Tanpa DTF" },
-  ...Object.entries(DTF_STATUS_LABELS).map(([value, label]) => ({ value, label })),
 ]
 
 export default function CsAntrianProduksiPage() {
@@ -92,7 +92,7 @@ export default function CsAntrianProduksiPage() {
   return (
     <CsShell
       title="Antrian produksi"
-      description="Order yang sudah diinput CS — pantau validasi DP, tahap produksi, dan status DTF."
+      description="Order yang sudah diinput CS — pantau validasi DP dan tahap produksi."
     >
       <div className="neo-card p-5 md:p-6">
         <DesignQueueListFilters
@@ -121,24 +121,6 @@ export default function CsAntrianProduksiPage() {
               className="neo-input cursor-pointer py-2.5 text-sm"
             >
               {PRODUKSI_PIPELINE_OPTIONS.map((option) => (
-                <option key={option.value || "all"} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Status DTF
-            </span>
-            <select
-              value={filters.dtfStatus}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, dtfStatus: e.target.value }))
-              }
-              className="neo-input cursor-pointer py-2.5 text-sm"
-            >
-              {PRODUKSI_DTF_OPTIONS.map((option) => (
                 <option key={option.value || "all"} value={option.value}>
                   {option.label}
                 </option>
@@ -178,10 +160,16 @@ export default function CsAntrianProduksiPage() {
                     CS
                   </th>
                   <th className="p-3 font-semibold uppercase tracking-wide">
-                    Progres
+                    Produksi
                   </th>
                   <th className="p-3 font-semibold uppercase tracking-wide">
-                    DTF
+                    Masuk
+                  </th>
+                  <th className="p-3 font-semibold uppercase tracking-wide">
+                    Deadline
+                  </th>
+                  <th className="p-3 font-semibold uppercase tracking-wide">
+                    Progres
                   </th>
                   <th className="p-3 font-semibold uppercase tracking-wide">
                     Diperbarui
@@ -194,12 +182,29 @@ export default function CsAntrianProduksiPage() {
               <tbody>
                 {filtered.map((item) => {
                   const progress = csAntrianProduksiProgressLabel(item)
-                  const dtfSummary = csAntrianProduksiDtfSummary(item)
+                  const jenisProduksi =
+                    item.FinalOrder?.jenisProduksi ?? item.jenisProduksi
+                  const expressPriority =
+                    item.FinalOrder?.expressPriority ?? item.expressPriority
+                  const deadline =
+                    item.FinalOrder?.deadline ?? item.tanggalDeadline
+                  const tglMasuk = resolveOrderEntryDate(
+                    item.FinalOrder?.submittedAt,
+                    item.FinalOrder?.createdAt
+                  )
+                  const deadlineWarning = getDeadlineWarning(deadline)
+                  const rowHighlight =
+                    deadlineWarning?.level === "tomorrow"
+                      ? "bg-amber-950/20"
+                      : deadlineWarning?.level === "today" ||
+                          deadlineWarning?.level === "overdue"
+                        ? "bg-red-950/20"
+                        : ""
 
                   return (
                     <tr
                       key={item.id}
-                      className="border-b border-zinc-800/80 hover:bg-zinc-900/40"
+                      className={`border-b border-zinc-800/80 hover:bg-zinc-900/40 ${rowHighlight}`.trim()}
                     >
                       <td className="p-3">
                         <p className="font-medium text-orange-400">
@@ -213,6 +218,24 @@ export default function CsAntrianProduksiPage() {
                       <td className="p-3 text-zinc-300">{item.namaArtikel}</td>
                       <td className="p-3 text-zinc-400">{item.csNama}</td>
                       <td className="p-3">
+                        <JenisProduksiBadge
+                          jenisProduksi={jenisProduksi}
+                          expressPriority={expressPriority}
+                        />
+                      </td>
+                      <td className="p-3 text-zinc-400">
+                        {formatDateIdShort(tglMasuk)}
+                      </td>
+                      <td className="p-3">
+                        <p className="text-zinc-300">
+                          {formatDateIdShort(deadline)}
+                        </p>
+                        <DeadlineWarningBadge
+                          deadline={deadline}
+                          className="mt-1 inline-flex"
+                        />
+                      </td>
+                      <td className="p-3">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${csProduksiProgressBadgeClass(progress.tone)}`}
                         >
@@ -223,9 +246,6 @@ export default function CsAntrianProduksiPage() {
                             {progress.secondary}
                           </p>
                         ) : null}
-                      </td>
-                      <td className="p-3 text-xs text-zinc-400">
-                        {dtfSummary ?? "—"}
                       </td>
                       <td className="p-3 text-zinc-500">
                         {new Date(item.updatedAt).toLocaleDateString("id-ID")}

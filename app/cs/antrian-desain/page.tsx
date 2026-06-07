@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import CsShell from "@/components/layout/cs-shell"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
-import { withCsApiScope } from "@/lib/cs-design-queue-access"
+import { withCsApiScope } from "@/lib/cs-api-scope"
 import {
   csAntrianDesainListRowAction,
   labelCsAntrianDesainStatus,

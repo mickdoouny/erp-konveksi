@@ -6,12 +6,17 @@ import {
   csDesignQueueOwnershipWhere,
   parseCsRequestScope,
 } from "@/lib/cs-design-queue-access"
+import { sortProductionQueue } from "@/lib/production-queue-sort"
 
 const finalOrderInclude = {
   select: {
     id: true,
     orderNumber: true,
     submittedAt: true,
+    createdAt: true,
+    jenisProduksi: true,
+    expressPriority: true,
+    deadline: true,
     AccountingTransaction: {
       select: {
         paymentStatus: true,
@@ -46,7 +51,15 @@ export async function GET(request: Request) {
       },
     })
 
-    const items = rows.filter(isCsAntrianProduksiItem)
+    const items = sortProductionQueue(
+      rows.filter(isCsAntrianProduksiItem).map((row) => ({
+        ...row,
+        jenisProduksi: row.FinalOrder?.jenisProduksi ?? row.jenisProduksi,
+        expressPriority: row.FinalOrder?.expressPriority ?? row.expressPriority,
+        deadline: row.FinalOrder?.deadline ?? row.tanggalDeadline,
+        submittedAt: row.FinalOrder?.submittedAt ?? null,
+      }))
+    )
 
     return NextResponse.json(items)
   } catch (error) {

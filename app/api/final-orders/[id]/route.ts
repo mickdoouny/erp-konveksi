@@ -12,7 +12,14 @@ export async function GET(
       where: { id },
       include: {
         DesignQueueItem: {
-          select: { sppGroupId: true, designId: true, artikelId: true },
+          select: {
+            sppGroupId: true,
+            designId: true,
+            artikelId: true,
+            desainUtama: true,
+            hasilDesain: true,
+            materiDesain: true,
+          },
         },
         FinalOrderRosterLine: { orderBy: { sortOrder: "asc" } },
         AccountingTransaction: true,

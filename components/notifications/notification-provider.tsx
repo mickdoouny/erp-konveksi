@@ -15,7 +15,7 @@ import {
   type NotificationCategory,
   type NotificationItem,
   type NotificationPayload,
-} from "@/lib/design-queue-notifications"
+} from "@/lib/design-queue-notifications-shared"
 import {
   countUnreadItems,
   fetchNotificationPayload,

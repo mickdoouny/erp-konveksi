@@ -1,5 +1,3 @@
-import { DtfPaymentRequestStatus, DtfStatus } from "@prisma/client"
-
 export const DTF_STATUS_LABELS: Record<string, string> = {
   TIDAK_PERLU: "Tidak perlu DTF",
   MENUNGGU_ORDER: "Menunggu order vendor (Jahit)",
@@ -43,11 +41,9 @@ export function dtfStatusBadgeClass(status: string): string {
 }
 
 export function isDtfPaymentApprovedForProduction(status: string): boolean {
-  return (
-    status === DtfStatus.DIBAYAR || status === DtfStatus.SIAP_PRODUKSI
-  )
+  return status === "DIBAYAR" || status === "SIAP_PRODUKSI"
 }
 
 export function isDtfPaymentPending(status: string): boolean {
-  return status === DtfPaymentRequestStatus.MENUNGGU
+  return status === "MENUNGGU"
 }

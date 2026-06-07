@@ -3,6 +3,13 @@ import { prisma } from "@/lib/prisma"
 import {
   adminApprovePipeline,
   advancePipelineStage,
+  advanceToQc,
+  completeDtfProcess,
+  completeKancingProcess,
+  completeStageProcess,
+  startDtfProcess,
+  startKancingProcess,
+  startStageProcess,
 } from "@/lib/production-pipeline"
 import { requestShipRelease } from "@/lib/accounting-service"
 
@@ -16,6 +23,7 @@ export async function PATCH(
     const actor = {
       name: String(body.actorName ?? "Admin Produksi"),
       role: String(body.actorRole ?? "admin_produksi"),
+      id: body.actorId ? String(body.actorId) : undefined,
     }
 
     if (body.action === "admin_approve") {
@@ -25,6 +33,43 @@ export async function PATCH(
 
     if (body.action === "advance_stage") {
       const data = await advancePipelineStage(id, actor)
+      return NextResponse.json({ success: true, data })
+    }
+
+    if (body.action === "start_stage") {
+      const data = await startStageProcess(id, actor)
+      return NextResponse.json({ success: true, data })
+    }
+
+    if (body.action === "complete_stage") {
+      const data = await completeStageProcess(id, actor, {
+        qty: body.qty != null ? Number(body.qty) : undefined,
+      })
+      return NextResponse.json({ success: true, data })
+    }
+
+    if (body.action === "start_kancing") {
+      const data = await startKancingProcess(id, actor)
+      return NextResponse.json({ success: true, data })
+    }
+
+    if (body.action === "complete_kancing") {
+      const data = await completeKancingProcess(id, actor)
+      return NextResponse.json({ success: true, data })
+    }
+
+    if (body.action === "start_dtf") {
+      const data = await startDtfProcess(id, actor)
+      return NextResponse.json({ success: true, data })
+    }
+
+    if (body.action === "complete_dtf") {
+      const data = await completeDtfProcess(id, actor)
+      return NextResponse.json({ success: true, data })
+    }
+
+    if (body.action === "advance_to_qc") {
+      const data = await advanceToQc(id, actor)
       return NextResponse.json({ success: true, data })
     }
 

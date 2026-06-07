@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
-import { CATEGORY_LABELS } from "@/lib/design-queue-notifications"
+import { CATEGORY_LABELS } from "@/lib/design-queue-notifications-shared"
 import { useNotificationsOptional } from "@/components/notifications/notification-provider"
 
 function BellIcon({ className }: { className?: string }) {

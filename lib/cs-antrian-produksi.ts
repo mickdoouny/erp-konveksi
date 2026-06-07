@@ -1,15 +1,22 @@
-import { AdminProduksiStatus } from "@prisma/client"
 import { isAccountingDpValidated } from "@/lib/cs-antrian-desain"
+import {
+  isCsAntrianDesainItem,
+  isCsAntrianProduksiItem,
+  type CsAntrianProduksiItem as CsAntrianProduksiItemBase,
+} from "@/lib/cs-queue-guards"
 import {
   labelPaymentStatus,
   labelProductionStatus,
 } from "@/lib/status-labels"
-import { labelDtfStatus } from "@/lib/dtf-status-labels"
 
 export type CsAntrianProduksiFinalOrder = {
   id: string
   orderNumber: string
   submittedAt?: string | Date | null
+  createdAt?: string | Date | null
+  jenisProduksi?: string
+  expressPriority?: number | null
+  deadline?: string | Date | null
   AccountingTransaction?: {
     paymentStatus: string
     totalHarga?: number
@@ -21,32 +28,17 @@ export type CsAntrianProduksiFinalOrder = {
     productionNumber: string
     currentStatus: string
     adminProduksiStatus: string
+    needsKancing?: boolean
     needsDTF?: boolean
     dtfCompletedAt?: string | Date | null
   } | null
 }
 
-export type CsAntrianProduksiItem = {
-  id: string
-  statusDesain: string
-  readyForAdmin?: boolean | null
-  perluDtf?: boolean
-  statusDtf?: string
+export type CsAntrianProduksiItem = CsAntrianProduksiItemBase & {
   FinalOrder?: CsAntrianProduksiFinalOrder | null
 }
 
-/** Item has left antrian desain after CS submitted input order. */
-export function isCsAntrianProduksiItem(item: CsAntrianProduksiItem): boolean {
-  const status = item.statusDesain.trim().toUpperCase()
-  if (status === "DISETUJUI_CS") return true
-  if (item.FinalOrder) return true
-  if (item.readyForAdmin) return true
-  return false
-}
-
-export function isCsAntrianDesainItem(item: CsAntrianProduksiItem): boolean {
-  return !isCsAntrianProduksiItem(item)
-}
+export { isCsAntrianDesainItem, isCsAntrianProduksiItem }
 
 export type CsProduksiProgressLabel = {
   primary: string
@@ -79,7 +71,7 @@ export function csAntrianProduksiProgressLabel(
 
   if (
     pipeline?.currentStatus === "ADMIN_PRODUKSI" &&
-    pipeline.adminProduksiStatus === AdminProduksiStatus.PENDING
+    pipeline.adminProduksiStatus === "PENDING"
   ) {
     return {
       primary: "Menunggu Admin Produksi",
@@ -115,10 +107,3 @@ export function csProduksiProgressBadgeClass(tone: CsProduksiProgressLabel["tone
   }
 }
 
-export function csAntrianProduksiDtfSummary(item: {
-  perluDtf?: boolean
-  statusDtf?: string
-}): string | null {
-  if (!item.perluDtf) return null
-  return labelDtfStatus(item.statusDtf ?? "MENUNGGU_ORDER")
-}

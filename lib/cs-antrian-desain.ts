@@ -1,5 +1,12 @@
-import type { DesignQueueStatusDesain } from "@prisma/client"
+import { isMenungguDp } from "@/lib/cs-queue-guards"
+import {
+  INVALID_PHONE_MESSAGE,
+  isValidIndonesianPhone,
+  normalizeIndonesianPhone,
+} from "@/lib/phone-normalize"
 import { isDpValidatedPaymentStatus } from "@/lib/status-labels"
+
+export { isMenungguDp }
 
 export type DesignFile = {
   name: string
@@ -24,7 +31,7 @@ export type DesignQueueItemRecord = {
   hasilDesain?: string | null
   catatanRevisi?: string | null
   revisionCount: number
-  statusDesain: DesignQueueStatusDesain | string
+  statusDesain: string
   fileDesainProduksi?: string | null
   perluDtf?: boolean
   catatanDtf?: string | null
@@ -48,6 +55,9 @@ export type DesignQueueItemRecord = {
     buktiBayarUrl?: string | null
   }>
   leadCode?: string | null
+  jenisProduksi?: string
+  expressPriority?: number | null
+  tanggalDeadline?: string | Date | null
   createdAt: string | Date
   updatedAt: string | Date
 }
@@ -83,6 +93,57 @@ export function serializeDesignFiles(files: DesignFile[]): string {
   return JSON.stringify(files)
 }
 
+/** Ekstensi gambar yang didukung untuk unggah/preview (Windows sering kosongkan MIME). */
+export const DESIGN_IMAGE_EXT =
+  /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|jfif|avif|tiff?)$/i
+
+export function isDesignImageFilename(name: string): boolean {
+  return DESIGN_IMAGE_EXT.test(name)
+}
+
+export function isDesignImageFile(file: File): boolean {
+  const mime = (file.type ?? "").trim().toLowerCase()
+  if (mime.startsWith("image/")) return true
+  const name = (file.name ?? "").trim()
+  if (name && isDesignImageFilename(name)) return true
+  return false
+}
+
+/** Ambil FileList dari drag event — beberapa browser/mobile hanya mengisi items, bukan files. */
+export function filesFromDataTransfer(dataTransfer: DataTransfer): FileList | null {
+  if (dataTransfer.files?.length) return dataTransfer.files
+
+  const transfer = new DataTransfer()
+  for (const item of Array.from(dataTransfer.items)) {
+    if (item.kind !== "file") continue
+    const file = item.getAsFile()
+    if (file) transfer.items.add(file)
+  }
+
+  return transfer.files.length ? transfer.files : null
+}
+
+export function isDesignImageUrl(url: string): boolean {
+  const path = url.split("?")[0]?.split("#")[0] ?? url
+  return DESIGN_IMAGE_EXT.test(path)
+}
+
+export function mergeDesignFiles(...groups: DesignFile[][]): DesignFile[] {
+  const seen = new Set<string>()
+  const result: DesignFile[] = []
+
+  for (const group of groups) {
+    for (const file of group) {
+      const key = file.url || file.name
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push(file)
+    }
+  }
+
+  return result
+}
+
 export function generateDesignId(sequence: number): string {
   return `DSN-${String(sequence).padStart(5, "0")}`
 }
@@ -114,23 +175,97 @@ export type CreateDesignBatchInput = {
   artikels: CreateArtikelInput[]
 }
 
-export function parseCsAntrianDesainBody(
+export type CsAntrianDesainFieldError = {
+  field: string
+  message: string
+}
+
+export type CsAntrianDesainValidated = {
+  namaKonsumen: string
+  telepon: string
+  noTeleponNormalized: string
+  alamat: string
+  artikels: CreateArtikelInput[]
+}
+
+export function validateCsAntrianDesainBody(
   body: CreateDesignBatchInput
-): { ok: true } | { ok: false; message: string } {
-  if (!body.namaKonsumen?.trim() || !body.telepon?.trim() || !body.alamat?.trim()) {
-    return { ok: false, message: "Data konsumen dan minimal satu artikel wajib diisi" }
+):
+  | { ok: true; data: CsAntrianDesainValidated }
+  | { ok: false; message: string; errors: CsAntrianDesainFieldError[] } {
+  const errors: CsAntrianDesainFieldError[] = []
+
+  const namaKonsumen = body.namaKonsumen?.trim() ?? ""
+  const telepon = body.telepon?.trim() ?? ""
+  const alamat = body.alamat?.trim() ?? ""
+
+  if (!namaKonsumen) {
+    errors.push({ field: "namaKonsumen", message: "Nama konsumen wajib diisi" })
+  }
+
+  if (!telepon) {
+    errors.push({ field: "telepon", message: "No. telepon wajib diisi" })
+  } else if (!isValidIndonesianPhone(telepon)) {
+    errors.push({ field: "telepon", message: INVALID_PHONE_MESSAGE })
+  }
+
+  if (!alamat) {
+    errors.push({ field: "alamat", message: "Alamat pengiriman wajib diisi" })
   }
 
   if (!Array.isArray(body.artikels) || body.artikels.length === 0) {
-    return { ok: false, message: "Data konsumen dan minimal satu artikel wajib diisi" }
+    errors.push({
+      field: "artikels",
+      message: "Minimal satu artikel wajib diisi",
+    })
+  } else {
+    body.artikels.forEach((artikel, index) => {
+      if (!artikel.namaArtikel?.trim()) {
+        errors.push({
+          field: `artikels.${index}.namaArtikel`,
+          message: `Nama artikel ${index + 1} wajib diisi`,
+        })
+      }
+    })
   }
 
-  for (const artikel of body.artikels) {
-    if (!artikel.namaArtikel?.trim()) {
-      return { ok: false, message: "Nama artikel wajib diisi untuk setiap artikel" }
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      message: "Lengkapi semua kolom wajib sebelum menyimpan",
+      errors,
     }
   }
 
+  const noTeleponNormalized = normalizeIndonesianPhone(telepon)
+  if (!noTeleponNormalized) {
+    return {
+      ok: false,
+      message: "Lengkapi semua kolom wajib sebelum menyimpan",
+      errors: [{ field: "telepon", message: INVALID_PHONE_MESSAGE }],
+    }
+  }
+
+  return {
+    ok: true,
+    data: {
+      namaKonsumen,
+      telepon,
+      noTeleponNormalized,
+      alamat,
+      artikels: body.artikels,
+    },
+  }
+}
+
+/** @deprecated Use validateCsAntrianDesainBody */
+export function parseCsAntrianDesainBody(
+  body: CreateDesignBatchInput
+): { ok: true } | { ok: false; message: string } {
+  const result = validateCsAntrianDesainBody(body)
+  if (!result.ok) {
+    return { ok: false, message: result.message }
+  }
   return { ok: true }
 }
 
@@ -195,12 +330,6 @@ export function labelCsAntrianDesainStatus(
   return statusLabel(status)
 }
 
-/** Includes legacy FILE_DISETUJUI_UPLOADED (same workflow phase). */
-export function isMenungguDp(status: string): boolean {
-  const key = status.trim().toUpperCase()
-  return key === "MENUNGGU_DP" || key === "FILE_DISETUJUI_UPLOADED"
-}
-
 export function hasProductionDesignFile(item: {
   fileDesainProduksi?: string | null
 }): boolean {
@@ -233,10 +362,14 @@ export type CsEditKonsumenInput = {
   alamatPengiriman: string
 }
 
+export type CsEditKonsumenValidated = CsEditKonsumenInput & {
+  noTeleponNormalized: string
+}
+
 export function parseCsEditKonsumenBody(
   body: Record<string, unknown>
 ):
-  | { ok: true; data: CsEditKonsumenInput }
+  | { ok: true; data: CsEditKonsumenValidated }
   | { ok: false; message: string } {
   const namaKonsumen = String(body.namaKonsumen ?? "").trim()
   const noTelepon = String(body.noTelepon ?? "").trim()
@@ -248,11 +381,22 @@ export function parseCsEditKonsumenBody(
   if (!noTelepon) {
     return { ok: false, message: "No. telepon wajib diisi" }
   }
+  if (!isValidIndonesianPhone(noTelepon)) {
+    return { ok: false, message: INVALID_PHONE_MESSAGE }
+  }
   if (!alamatPengiriman) {
     return { ok: false, message: "Alamat pengiriman wajib diisi" }
   }
 
-  return { ok: true, data: { namaKonsumen, noTelepon, alamatPengiriman } }
+  const noTeleponNormalized = normalizeIndonesianPhone(noTelepon)
+  if (!noTeleponNormalized) {
+    return { ok: false, message: INVALID_PHONE_MESSAGE }
+  }
+
+  return {
+    ok: true,
+    data: { namaKonsumen, noTelepon, alamatPengiriman, noTeleponNormalized },
+  }
 }
 
 export type CsAntrianDesainDetailGuidance = {

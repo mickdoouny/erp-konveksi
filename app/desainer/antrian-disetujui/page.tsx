@@ -128,9 +128,13 @@ export default function DesainerAntrianDisetujuiPage() {
                     <td className="p-3 text-center">
                       <Link
                         href={`/desainer/antrian-disetujui/${row.id}`}
-                        className="text-orange-400 hover:text-orange-300"
+                        className={
+                          row.fileDesainProduksi
+                            ? "text-zinc-300 hover:text-orange-300"
+                            : "text-orange-400 hover:text-orange-300"
+                        }
                       >
-                        Unggah CDR
+                        {row.fileDesainProduksi ? "Detail" : "Unggah CDR"}
                       </Link>
                     </td>
                   </tr>

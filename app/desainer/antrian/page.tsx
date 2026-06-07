@@ -48,7 +48,12 @@ export default function DesainerAntrianPage() {
   }
 
   useEffect(() => {
-    if (auth.status !== "authenticated") return
+    if (auth.status !== "authenticated") {
+      if (auth.status !== "loading") {
+        setLoading(false)
+      }
+      return
+    }
     load()
   }, [auth.status])
 

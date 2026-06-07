@@ -116,11 +116,6 @@ export default function Sidebar() {
                   </Link>
                 </li>
                 <li>
-                  <Link href="/admin/dtf-vendors" className={linkClass}>
-                    Vendor DTF
-                  </Link>
-                </li>
-                <li>
                   <Link href="/admin/final-orders" className={linkClass}>
                     Admin Produksi
                   </Link>
@@ -199,11 +194,6 @@ export default function Sidebar() {
                 <li>
                   <Link href="/admin/keuangan" className={linkClass}>
                     Admin Keuangan
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/admin/dtf-vendors" className={linkClass}>
-                    Vendor DTF
                   </Link>
                 </li>
               </>
