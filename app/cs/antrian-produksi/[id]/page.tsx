@@ -1,21 +1,23 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useCallback, useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import { AntrianProduksiStatusCard } from "@/components/cs/antrian-produksi-status-card"
 import DesignPreviewPair from "@/components/cs/design-preview-pair"
 import { DesignQueueNotesSection } from "@/components/cs/design-queue-notes-section"
+import { SettingConfirmationPanel } from "@/components/cs/setting-confirmation-panel"
 import CsShell from "@/components/layout/cs-shell"
-import { readStoredUser } from "@/lib/auth"
-import { homePathByRole } from "@/lib/auth-redirect"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
 import type { DesignQueueItemRecord } from "@/lib/cs-antrian-desain"
 import {
   isCsAntrianProduksiItem,
   type CsAntrianProduksiFinalOrder,
 } from "@/lib/cs-antrian-produksi"
 import type { DesignQueueMessageRecord } from "@/lib/design-queue-notes"
+import { usePollingRefresh } from "@/hooks/use-polling-refresh"
 import { withCsApiScope } from "@/lib/cs-api-scope"
+import { formatQueueItemSubtitle } from "@/lib/cs-queue-identifiers"
 
 type DetailItem = DesignQueueItemRecord & {
   messages?: DesignQueueMessageRecord[]
@@ -23,59 +25,53 @@ type DetailItem = DesignQueueItemRecord & {
 }
 
 export default function CsAntrianProduksiDetailPage() {
-  const router = useRouter()
+  const auth = useAuthGuard({ roles: ["cs", "owner"] })
   const params = useParams()
   const id = params.id as string
 
   const [item, setItem] = useState<DetailItem | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function loadItem(user: { role: string; id?: string; nama?: string }) {
-    try {
-      setLoading(true)
-      const res = await fetch(
-        withCsApiScope(`/api/cs/antrian-desain/${id}`, user),
-        {
-          cache: "no-store",
+  const loadItem = useCallback(
+    async (
+      user: { role: string; id?: string; nama?: string },
+      options?: { silent?: boolean }
+    ) => {
+      try {
+        if (!options?.silent) setLoading(true)
+        const res = await fetch(
+          withCsApiScope(`/api/cs/antrian-produksi/${id}`, user),
+          { cache: "no-store" }
+        )
+        if (!res.ok) {
+          setItem(null)
+          return
         }
-      )
-      if (!res.ok) {
+        const data = await res.json()
+        setItem(data)
+      } catch {
         setItem(null)
-        return
+      } finally {
+        if (!options?.silent) setLoading(false)
       }
-      const data = await res.json()
-      setItem(data)
-    } catch {
-      setItem(null)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [id]
+  )
 
   useEffect(() => {
-    const user = readStoredUser()
-    if (!user) {
-      router.replace("/login")
-      return
-    }
-    if (!["cs", "owner"].includes(user.role)) {
-      router.push(homePathByRole(user.role))
-      return
-    }
+    if (auth.status !== "authenticated") return
+    void loadItem(auth.user)
+  }, [auth.status, auth.user, loadItem])
 
-    queueMicrotask(() => {
-      void loadItem(user)
-    })
-  }, [router, id])
+  usePollingRefresh(
+    useCallback(() => {
+      if (auth.status !== "authenticated") return
+      void loadItem(auth.user, { silent: true })
+    }, [auth.status, auth.user, loadItem]),
+    { enabled: auth.status === "authenticated" }
+  )
 
-  useEffect(() => {
-    if (!item || loading) return
-    if (!isCsAntrianProduksiItem(item)) {
-      router.replace(`/cs/antrian-desain/${id}`)
-    }
-  }, [item, loading, router, id])
-
-  if (loading) {
+  if (auth.status === "loading" || loading) {
     return (
       <CsShell title="Detail antrian produksi">
         <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center text-zinc-500">
@@ -104,7 +100,13 @@ export default function CsAntrianProduksiDetailPage() {
   return (
     <CsShell
       title="Detail antrian produksi"
-      description={`${item.FinalOrder?.orderNumber ?? item.designId} · ${item.artikelId}`}
+      description={formatQueueItemSubtitle({
+        orderNumber: item.FinalOrder?.orderNumber,
+        sppNumber: item.sppNumber,
+        artikelId: item.artikelId,
+        namaArtikel: item.namaArtikel,
+        designId: item.designId,
+      })}
       actions={
         <Link
           href="/cs/antrian-produksi"
@@ -114,6 +116,10 @@ export default function CsAntrianProduksiDetailPage() {
         </Link>
       }
     >
+      {auth.status === "authenticated" ? (
+        <SettingConfirmationPanel user={auth.user} />
+      ) : null}
+
       <AntrianProduksiStatusCard item={item} />
 
       <div className="my-6">

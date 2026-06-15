@@ -1,19 +1,21 @@
-import { isAccountingDpValidated } from "@/lib/cs-antrian-desain"
 import {
   isCsAntrianDesainItem,
   isCsAntrianProduksiItem,
   type CsAntrianProduksiItem as CsAntrianProduksiItemBase,
 } from "@/lib/cs-queue-guards"
 import {
-  labelPaymentStatus,
-  labelProductionStatus,
-} from "@/lib/status-labels"
+  productionProgressBadgeClass,
+  resolveProductionProgressLabel,
+  type ProductionProgressLabel,
+  type ProductionProgressTone,
+} from "@/lib/production-status-display"
 
 export type CsAntrianProduksiFinalOrder = {
   id: string
   orderNumber: string
   submittedAt?: string | Date | null
   createdAt?: string | Date | null
+  deliveryStatus?: string
   jenisProduksi?: string
   expressPriority?: number | null
   deadline?: string | Date | null
@@ -30,7 +32,17 @@ export type CsAntrianProduksiFinalOrder = {
     adminProduksiStatus: string
     needsKancing?: boolean
     needsDTF?: boolean
+    kancingCompletedAt?: string | Date | null
     dtfCompletedAt?: string | Date | null
+    shipReleaseStatus?: string
+    updatedAt?: string | Date | null
+    settingResultFiles?: string | null
+    settingSubmittedAt?: string | Date | null
+    settingSubmittedBy?: string | null
+    settingRejectNote?: string | null
+    settingSentToConsumerAt?: string | Date | null
+    settingSentToConsumerBy?: string | null
+    settingSubmitCount?: number | null
   } | null
 }
 
@@ -40,70 +52,21 @@ export type CsAntrianProduksiItem = CsAntrianProduksiItemBase & {
 
 export { isCsAntrianDesainItem, isCsAntrianProduksiItem }
 
-export type CsProduksiProgressLabel = {
-  primary: string
-  secondary?: string
-  tone: "muted" | "warning" | "info" | "success"
-}
+export type CsProduksiProgressLabel = ProductionProgressLabel
+export type CsProduksiProgressTone = ProductionProgressTone
 
 export function csAntrianProduksiProgressLabel(
   item: CsAntrianProduksiItem
 ): CsProduksiProgressLabel {
-  const payment =
-    item.FinalOrder?.AccountingTransaction?.paymentStatus ?? null
-  const pipeline = item.FinalOrder?.ProductionPipeline
-
-  if (!payment && !pipeline) {
-    return {
-      primary: "Order tersimpan",
-      secondary: "Menunggu Admin Keuangan & Produksi",
-      tone: "info",
-    }
-  }
-
-  if (!isAccountingDpValidated(payment)) {
-    return {
-      primary: labelPaymentStatus(payment ?? "MENUNGGU_DP"),
-      secondary: "Menunggu validasi DP — Admin Keuangan",
-      tone: "warning",
-    }
-  }
-
-  if (
-    pipeline?.currentStatus === "ADMIN_PRODUKSI" &&
-    pipeline.adminProduksiStatus === "PENDING"
-  ) {
-    return {
-      primary: "Menunggu Admin Produksi",
-      secondary: labelPaymentStatus(payment ?? ""),
-      tone: "info",
-    }
-  }
-
-  if (pipeline?.currentStatus) {
-    return {
-      primary: labelProductionStatus(pipeline.currentStatus),
-      secondary: labelPaymentStatus(payment ?? ""),
-      tone: "success",
-    }
-  }
-
-  return {
-    primary: labelPaymentStatus(payment ?? ""),
-    tone: "success",
-  }
+  return resolveProductionProgressLabel({
+    paymentStatus: item.FinalOrder?.AccountingTransaction?.paymentStatus ?? null,
+    deliveryStatus: item.FinalOrder?.deliveryStatus ?? null,
+    pipeline: item.FinalOrder?.ProductionPipeline ?? null,
+  })
 }
 
-export function csProduksiProgressBadgeClass(tone: CsProduksiProgressLabel["tone"]): string {
-  switch (tone) {
-    case "warning":
-      return "border-amber-500/40 bg-amber-950/40 text-amber-300"
-    case "info":
-      return "border-sky-500/40 bg-sky-950/40 text-sky-200"
-    case "success":
-      return "border-emerald-500/40 bg-emerald-950/40 text-emerald-300"
-    default:
-      return "border-zinc-600 bg-zinc-900/80 text-zinc-300"
-  }
+export function csProduksiProgressBadgeClass(
+  tone: CsProduksiProgressLabel["tone"]
+): string {
+  return productionProgressBadgeClass(tone)
 }
-

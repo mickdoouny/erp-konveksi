@@ -19,6 +19,7 @@ export async function GET(
             desainUtama: true,
             hasilDesain: true,
             materiDesain: true,
+            catatanDtf: true,
           },
         },
         FinalOrderRosterLine: { orderBy: { sortOrder: "asc" } },

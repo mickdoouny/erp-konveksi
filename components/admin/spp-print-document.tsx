@@ -18,6 +18,11 @@ export type PrintableSppMockupImage = {
   alt?: string
 }
 
+export type PrintableSppProductionNote = {
+  label: string
+  detail?: string | null
+}
+
 export type PrintableSppDocument = {
   namaKonsumen: string
   namaArtikel: string
@@ -30,6 +35,7 @@ export type PrintableSppDocument = {
   jenisOrder?: string
   mockupImages: PrintableSppMockupImage[]
   rosterLines: PrintableSppRosterLine[]
+  productionNotes?: PrintableSppProductionNote[]
 }
 
 const SPP_NOTE_LINES = [
@@ -210,6 +216,17 @@ export function SppPrintDocument({
                 </p>
               ))}
             </div>
+            {data.productionNotes && data.productionNotes.length > 0 ? (
+              <div className="border-t-2 border-black bg-amber-200 px-2 py-1 text-[9px] font-bold leading-snug text-black">
+                <p className="mb-0.5 uppercase">Catatan produksi</p>
+                {data.productionNotes.map((note, i) => (
+                  <p key={i}>
+                    • {note.label}
+                    {note.detail ? ` — ${note.detail}` : ""}
+                  </p>
+                ))}
+              </div>
+            ) : null}
           </section>
 
           {/* Header: order info + workflow */}

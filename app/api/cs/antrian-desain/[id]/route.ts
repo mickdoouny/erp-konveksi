@@ -52,6 +52,7 @@ export async function GET(
             jenisProduksi: true,
             expressPriority: true,
             deadline: true,
+            deliveryStatus: true,
             AccountingTransaction: {
               select: {
                 paymentStatus: true,
@@ -66,8 +67,12 @@ export async function GET(
                 productionNumber: true,
                 currentStatus: true,
                 adminProduksiStatus: true,
+                needsKancing: true,
                 needsDTF: true,
+                kancingCompletedAt: true,
                 dtfCompletedAt: true,
+                shipReleaseStatus: true,
+                updatedAt: true,
               },
             },
           },
@@ -362,6 +367,7 @@ export async function PATCH(
             jenisProduksi: true,
             expressPriority: true,
             deadline: true,
+            deliveryStatus: true,
             AccountingTransaction: {
               select: {
                 paymentStatus: true,
@@ -376,8 +382,12 @@ export async function PATCH(
                 productionNumber: true,
                 currentStatus: true,
                 adminProduksiStatus: true,
+                needsKancing: true,
                 needsDTF: true,
+                kancingCompletedAt: true,
                 dtfCompletedAt: true,
+                shipReleaseStatus: true,
+                updatedAt: true,
               },
             },
           },

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import CsShell from "@/components/layout/cs-shell"
 import { DesignQueueListFilters } from "@/components/design-queue/list-filters"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
@@ -18,8 +18,11 @@ import {
   uniqueCsNames,
   type CsProduksiFilterState,
 } from "@/lib/design-queue-filters"
+import { usePollingRefresh } from "@/hooks/use-polling-refresh"
+import { resolveProductionUpdatedAt } from "@/lib/production-status-display"
 import { PAYMENT_STATUS_LABELS, PRODUCTION_STATUS_LABELS } from "@/lib/status-labels"
 import { withCsApiScope } from "@/lib/cs-api-scope"
+import { SettingConfirmationPanel } from "@/components/cs/setting-confirmation-panel"
 import { DeadlineWarningBadge } from "@/components/production/deadline-warning-badge"
 import { JenisProduksiBadge } from "@/components/production/jenis-produksi-badge"
 import {
@@ -27,6 +30,7 @@ import {
   getDeadlineWarning,
   resolveOrderEntryDate,
 } from "@/lib/deadline-warning"
+import { QueueIdentifierBadges } from "@/components/cs/queue-identifier-badges"
 
 type ProduksiRow = DesignQueueItemRecord & {
   FinalOrder?: CsAntrianProduksiFinalOrder | null
@@ -62,25 +66,39 @@ export default function CsAntrianProduksiPage() {
     EMPTY_CS_PRODUKSI_FILTERS
   )
 
-  async function loadItems(user: { role: string; id?: string; nama?: string }) {
-    try {
-      setLoading(true)
-      const res = await fetch(withCsApiScope("/api/cs/antrian-produksi", user), {
-        cache: "no-store",
-      })
-      const data = await res.json()
-      setItems(Array.isArray(data) ? data : [])
-    } catch {
-      setItems([])
-    } finally {
-      setLoading(false)
-    }
-  }
+  const loadItems = useCallback(
+    async (
+      user: { role: string; id?: string; nama?: string },
+      options?: { silent?: boolean }
+    ) => {
+      try {
+        if (!options?.silent) setLoading(true)
+        const res = await fetch(withCsApiScope("/api/cs/antrian-produksi", user), {
+          cache: "no-store",
+        })
+        const data = await res.json()
+        setItems(Array.isArray(data) ? data : [])
+      } catch {
+        setItems([])
+      } finally {
+        if (!options?.silent) setLoading(false)
+      }
+    },
+    []
+  )
 
   useEffect(() => {
     if (auth.status !== "authenticated") return
-    loadItems(auth.user)
-  }, [auth.status, auth.user])
+    void loadItems(auth.user)
+  }, [auth.status, auth.user, loadItems])
+
+  usePollingRefresh(
+    useCallback(() => {
+      if (auth.status !== "authenticated") return
+      void loadItems(auth.user, { silent: true })
+    }, [auth.status, auth.user, loadItems]),
+    { enabled: auth.status === "authenticated" }
+  )
 
   const csOptions = useMemo(() => uniqueCsNames(items), [items])
   const filtered = useMemo(
@@ -92,15 +110,23 @@ export default function CsAntrianProduksiPage() {
   return (
     <CsShell
       title="Antrian produksi"
-      description="Order yang sudah diinput CS — pantau validasi DP dan tahap produksi."
+      description="Order yang sudah diinput CS — pantau validasi DP dan tahap produksi (diperbarui otomatis setiap 12 detik)."
     >
+      {auth.status === "authenticated" ? (
+        <SettingConfirmationPanel user={auth.user} />
+      ) : null}
+
       <div className="neo-card p-5 md:p-6">
         <DesignQueueListFilters
           filters={filters}
           onChange={(next) => setFilters((prev) => ({ ...prev, ...next }))}
           onResetAll={() => setFilters(EMPTY_CS_PRODUKSI_FILTERS)}
           filtersActive={filtersActive}
-          onRefresh={loadItems}
+          onRefresh={() => {
+            if (auth.status === "authenticated") {
+              void loadItems(auth.user)
+            }
+          }}
           searchPlaceholder="Cari konsumen, artikel, FO, DSN…"
           paymentStatusOptions={PRODUKSI_PAYMENT_OPTIONS}
           csOptions={csOptions}
@@ -148,7 +174,7 @@ export default function CsAntrianProduksiPage() {
               <thead>
                 <tr className="border-b border-zinc-800 bg-zinc-950/80 text-left text-zinc-500">
                   <th className="p-3 font-semibold uppercase tracking-wide">
-                    FO / DSN
+                    Identitas order
                   </th>
                   <th className="p-3 font-semibold uppercase tracking-wide">
                     Konsumen
@@ -207,12 +233,14 @@ export default function CsAntrianProduksiPage() {
                       className={`border-b border-zinc-800/80 hover:bg-zinc-900/40 ${rowHighlight}`.trim()}
                     >
                       <td className="p-3">
-                        <p className="font-medium text-orange-400">
-                          {item.FinalOrder?.orderNumber ?? item.designId}
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                          {item.designId} · {item.artikelId}
-                        </p>
+                        <QueueIdentifierBadges
+                          orderNumber={item.FinalOrder?.orderNumber}
+                          sppNumber={item.sppNumber}
+                          artikelId={item.artikelId}
+                          namaArtikel={item.namaArtikel}
+                          designId={item.designId}
+                          variant="compact"
+                        />
                       </td>
                       <td className="p-3 text-zinc-200">{item.namaKonsumen}</td>
                       <td className="p-3 text-zinc-300">{item.namaArtikel}</td>
@@ -248,7 +276,20 @@ export default function CsAntrianProduksiPage() {
                         ) : null}
                       </td>
                       <td className="p-3 text-zinc-500">
-                        {new Date(item.updatedAt).toLocaleDateString("id-ID")}
+                        {(() => {
+                          const updated = resolveProductionUpdatedAt(
+                            item.updatedAt,
+                            item.FinalOrder?.ProductionPipeline?.updatedAt
+                          )
+                          return updated
+                            ? updated.toLocaleString("id-ID", {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "—"
+                        })()}
                       </td>
                       <td className="whitespace-nowrap p-3 text-center">
                         <Link

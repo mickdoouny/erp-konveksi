@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import {
   AdminProduksiStatus,
+  DeliveryStatus,
   FinalOrderStatus,
   PaymentStatus,
   ProductionStatus,
@@ -44,6 +45,14 @@ export async function GET(request: Request) {
                 },
               },
             }
+        : queue === "packing"
+          ? {
+              ProductionPipeline: {
+                is: {
+                  currentStatus: ProductionStatus.PACKING,
+                },
+              },
+            }
         : queue === "dtf_stage"
           ? {
               needsDTF: true,
@@ -58,6 +67,11 @@ export async function GET(request: Request) {
                   currentStatus: ProductionStatus.SIAP_KIRIM,
                 },
               },
+            }
+        : queue === "in_production"
+          ? {
+              ProductionPipeline: { isNot: null },
+              deliveryStatus: { not: DeliveryStatus.TERKIRIM },
             }
           : status
             ? { status: status as FinalOrderStatus }

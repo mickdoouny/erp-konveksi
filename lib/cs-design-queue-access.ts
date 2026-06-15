@@ -51,6 +51,7 @@ export function csDesignQueueOwnershipWhere(
   return { csNama: scope.csNama! }
 }
 
+/** Must mirror `csDesignQueueOwnershipWhere` for single-row checks (e.g. detail GET). */
 export function csOwnsDesignQueueItem(
   scope: CsRequestScope,
   item: Pick<DesignQueueItem, "csId" | "csNama">
@@ -63,13 +64,20 @@ export function csOwnsDesignQueueItem(
     return true
   }
 
-  if (scope.csId && item.csId === scope.csId) {
-    return true
+  if (!scope.csId && !scope.csNama) {
+    return false
   }
 
-  if (!item.csId && scope.csNama && item.csNama === scope.csNama) {
-    return true
+  if (scope.csId && scope.csNama) {
+    return (
+      item.csId === scope.csId ||
+      (!item.csId && item.csNama === scope.csNama)
+    )
   }
 
-  return false
+  if (scope.csId) {
+    return item.csId === scope.csId
+  }
+
+  return item.csNama === scope.csNama
 }

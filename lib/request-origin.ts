@@ -1,50 +1,28 @@
-function hostFromReferer(referer: string | null): string | null {
-  if (!referer) {
-    return null
-  }
-  try {
-    const { host } = new URL(referer)
-    return host && !host.startsWith("0.0.0.0") ? host : null
-  } catch {
-    return null
-  }
-}
+import { NextResponse } from "next/server"
 
-/** Build redirect origin from Host header (dev:lan binds 0.0.0.0 — never put that in Location). */
-export function requestOrigin(request: Request): string {
-  const url = new URL(request.url)
-  const proto =
-    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ??
-    url.protocol.replace(":", "")
-
-  const host =
-    request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ??
-    request.headers.get("host")?.trim() ??
-    hostFromReferer(request.headers.get("referer"))
-
-  if (host && !host.startsWith("0.0.0.0")) {
-    return `${proto}://${host}`
-  }
-
-  if (url.hostname !== "0.0.0.0") {
-    return url.origin
-  }
-
-  const lanHost = process.env.ERP_LAN_HOST?.trim()
-  if (lanHost) {
-    return `${proto}://${lanHost}`
-  }
-
-  const port = url.port || "3000"
-  return `http://localhost:${port}`
-}
-
-export function redirectUrl(request: Request, pathname: string, search?: Record<string, string>): URL {
-  const url = new URL(pathname, requestOrigin(request))
+/** Relative path + query — never embed localhost/LAN IP in Location headers. */
+export function relativeRedirectPath(
+  pathname: string,
+  search?: Record<string, string>
+): string {
+  const params = new URLSearchParams()
   if (search) {
     for (const [key, value] of Object.entries(search)) {
-      url.searchParams.set(key, value)
+      params.set(key, value)
     }
   }
-  return url
+  const qs = params.toString()
+  return qs ? `${pathname}?${qs}` : pathname
+}
+
+/** HTTP redirect with a relative Location (safe for LAN + multi-app :3000 setups). */
+export function relativeRedirectResponse(
+  pathname: string,
+  search?: Record<string, string>,
+  status = 307
+): NextResponse {
+  return new NextResponse(null, {
+    status,
+    headers: { Location: relativeRedirectPath(pathname, search) },
+  })
 }

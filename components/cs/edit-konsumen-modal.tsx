@@ -72,8 +72,8 @@ function EditKonsumenFormBody({
           Edit informasi konsumen
         </h2>
         <p className="mt-1 text-sm text-zinc-400">
-          {item.sppGroupId?.trim()
-            ? "Perubahan berlaku untuk semua artikel dalam grup SPP yang sama."
+          {item.sppNumber?.trim()
+            ? `Perubahan berlaku untuk semua artikel dengan No. SPP ${item.sppNumber.trim()}.`
             : "Perbarui nama, telepon, dan alamat pengiriman."}
         </p>
       </div>

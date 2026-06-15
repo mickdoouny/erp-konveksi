@@ -12,6 +12,8 @@ import {
   type DesignQueueItemRecord,
 } from "@/lib/cs-antrian-desain"
 import type { AuthUser } from "@/lib/auth"
+import { QueueIdentifierBadges } from "@/components/cs/queue-identifier-badges"
+import { queueIdentifierSearchText } from "@/lib/cs-queue-identifiers"
 
 type AntrianRow = DesignQueueItemRecord & {
   FinalOrder?: {
@@ -67,10 +69,7 @@ export default function CsAntrianDesainPage() {
     const q = filter.toLowerCase()
     return (
       item.namaKonsumen.toLowerCase().includes(q) ||
-      item.artikelId.toLowerCase().includes(q) ||
-      item.designId.toLowerCase().includes(q) ||
-      item.namaArtikel.toLowerCase().includes(q) ||
-      (item.sppGroupId?.toLowerCase().includes(q) ?? false)
+      queueIdentifierSearchText(item).includes(q)
     )
   })
 
@@ -88,7 +87,7 @@ export default function CsAntrianDesainPage() {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <input
             type="search"
-            placeholder="Cari konsumen, artikel, DSN, grup SPP…"
+            placeholder="Cari konsumen, artikel, DSN, no. SPP…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="neo-input max-w-md"
@@ -121,10 +120,10 @@ export default function CsAntrianDesainPage() {
               <thead>
                 <tr className="border-b border-zinc-800 bg-zinc-950/80 text-left text-zinc-500">
                   <th className="p-3 font-semibold uppercase tracking-wide">
-                    DSN / ART
+                    Identitas pengajuan
                   </th>
                   <th className="p-3 font-semibold uppercase tracking-wide">
-                    Grup SPP
+                    No. SPP
                   </th>
                   <th className="p-3 font-semibold uppercase tracking-wide">
                     Konsumen
@@ -165,13 +164,15 @@ export default function CsAntrianDesainPage() {
                       className="border-b border-zinc-800/80 hover:bg-zinc-900/40"
                     >
                       <td className="p-3">
-                        <p className="font-medium text-orange-400">
-                          {item.designId}
-                        </p>
-                        <p className="text-xs text-zinc-500">{item.artikelId}</p>
+                        <QueueIdentifierBadges
+                          artikelId={item.artikelId}
+                          namaArtikel={item.namaArtikel}
+                          designId={item.designId}
+                          variant="compact"
+                        />
                       </td>
-                      <td className="p-3 font-mono text-xs text-zinc-400">
-                        {item.sppGroupId ?? "—"}
+                      <td className="p-3 text-sm text-zinc-300">
+                        {item.sppNumber?.trim() || "—"}
                       </td>
                       <td className="p-3 text-zinc-200">{item.namaKonsumen}</td>
                       <td className="p-3 text-zinc-300">{item.namaArtikel}</td>

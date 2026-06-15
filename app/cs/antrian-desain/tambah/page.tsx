@@ -1,15 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import CsFullscreenPage from "@/components/cs/cs-fullscreen-page"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
-import type { DesignFile } from "@/lib/cs-antrian-desain"
+import { statusLabel, type DesignFile } from "@/lib/cs-antrian-desain"
 import {
   hasCsTambahDesainFieldErrors,
   validateCsTambahDesainForm,
   type CsTambahDesainFieldErrors,
 } from "@/lib/cs-antrian-desain-form"
+import type { KonsumenHistoryItem } from "@/lib/konsumen-phone-lookup"
+import { withCsApiScope } from "@/lib/cs-api-scope"
 import { isValidIndonesianPhone } from "@/lib/phone-normalize"
 
 type ArtikelForm = {
@@ -17,16 +19,20 @@ type ArtikelForm = {
   spp: string
   catatanDesain: string
   perluDtf: boolean
+  perluKancing: boolean
+  perluProving: boolean
   catatanDtf: string
   desainUtama: DesignFile[]
   logoSponsor: DesignFile[]
 }
 
-const emptyArtikel = (): ArtikelForm => ({
+const emptyArtikel = (spp = ""): ArtikelForm => ({
   namaArtikel: "",
-  spp: "",
+  spp,
   catatanDesain: "",
   perluDtf: false,
+  perluKancing: false,
+  perluProving: false,
   catatanDtf: "",
   desainUtama: [],
   logoSponsor: [],
@@ -58,6 +64,9 @@ export default function TambahDesainPage() {
   const router = useRouter()
   const [namaCs, setNamaCs] = useState("CS")
   const [csId, setCsId] = useState<string | undefined>()
+  const [csUsername, setCsUsername] = useState<string | undefined>()
+  const [groupSpp, setGroupSpp] = useState("")
+  const [sppLoading, setSppLoading] = useState(true)
   const [namaKonsumen, setNamaKonsumen] = useState("")
   const [telepon, setTelepon] = useState("")
   const [alamat, setAlamat] = useState("")
@@ -70,6 +79,11 @@ export default function TambahDesainPage() {
   const [uploading, setUploading] = useState("")
   const [lookupHint, setLookupHint] = useState("")
   const [lookupLoading, setLookupLoading] = useState(false)
+  const [orderHistory, setOrderHistory] = useState<KonsumenHistoryItem[]>([])
+  const artikelSectionRef = useRef<HTMLDivElement>(null)
+  const phoneInputRef = useRef<HTMLInputElement>(null)
+  const lookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lookupRequestIdRef = useRef(0)
 
   const auth = useAuthGuard({ roles: ["cs", "owner"] })
 
@@ -78,7 +92,49 @@ export default function TambahDesainPage() {
     const user = auth.user
     setNamaCs(user.nama || user.divisi || "CS")
     setCsId(user.id)
+    setCsUsername(user.username)
   }, [auth.status, auth.user])
+
+  useEffect(() => {
+    if (auth.status !== "authenticated") return
+
+    let cancelled = false
+    setSppLoading(true)
+
+    void (async () => {
+      try {
+        const res = await fetch(
+          withCsApiScope("/api/cs/next-spp-number", auth.user)
+        )
+        const data = await res.json()
+        if (cancelled || !res.ok || !data.sppNumber) return
+
+        setGroupSpp((current) => current || data.sppNumber)
+        setArtikels((prev) => {
+          if (prev.some((row) => row.spp.trim())) return prev
+          return prev.map((row) => ({ ...row, spp: data.sppNumber }))
+        })
+      } catch {
+        /* keep empty — server assigns on save */
+      } finally {
+        if (!cancelled) setSppLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [auth.status, auth.user])
+
+  useEffect(() => {
+    phoneInputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current)
+    }
+  }, [])
 
   function updateArtikel(index: number, patch: Partial<ArtikelForm>) {
     setArtikels((prev) =>
@@ -87,7 +143,8 @@ export default function TambahDesainPage() {
   }
 
   function addArtikel() {
-    setArtikels((prev) => [...prev, emptyArtikel()])
+    const sharedSpp = artikels[0]?.spp.trim() || groupSpp
+    setArtikels((prev) => [...prev, emptyArtikel(sharedSpp)])
   }
 
   function removeArtikel(index: number) {
@@ -110,44 +167,118 @@ export default function TambahDesainPage() {
     })
   }
 
+  function isArtikelEmpty(row: ArtikelForm): boolean {
+    return (
+      !row.namaArtikel.trim() &&
+      !row.spp.trim() &&
+      !row.catatanDesain.trim() &&
+      !row.perluDtf &&
+      !row.perluKancing &&
+      !row.perluProving &&
+      !row.catatanDtf.trim() &&
+      row.desainUtama.length === 0 &&
+      row.logoSponsor.length === 0
+    )
+  }
+
+  function applyOrderUlang(item: KonsumenHistoryItem) {
+    const prefilled: ArtikelForm = {
+      namaArtikel: item.namaArtikel,
+      spp: item.sppNumber ?? "",
+      catatanDesain: item.catatan ?? "",
+      perluDtf: item.perluDtf,
+      perluKancing: item.perluKancing ?? false,
+      perluProving: item.perluProving ?? false,
+      catatanDtf: item.catatanDtf ?? "",
+      desainUtama:
+        item.desainUtama.length > 0 ? item.desainUtama : item.hasilDesain,
+      logoSponsor: item.logoSponsor,
+    }
+
+    setArtikels((prev) => {
+      if (prev.length === 1 && isArtikelEmpty(prev[0])) {
+        return [prefilled]
+      }
+      return [...prev, prefilled]
+    })
+
+    setFieldErrors((prev) => {
+      if (!prev?.artikelNama) return prev
+      const nextArtikel = { ...prev.artikelNama }
+      delete nextArtikel[0]
+      return {
+        ...prev,
+        artikelNama:
+          Object.keys(nextArtikel).length > 0 ? nextArtikel : undefined,
+      }
+    })
+
+    requestAnimationFrame(() => {
+      artikelSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+    })
+  }
+
+  function scheduleKonsumenLookup(rawPhone: string) {
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current)
+    lookupTimerRef.current = setTimeout(() => {
+      void lookupKonsumenByPhone(rawPhone)
+    }, 400)
+  }
+
   async function lookupKonsumenByPhone(rawPhone: string) {
     const trimmed = rawPhone.trim()
     if (!trimmed || !isValidIndonesianPhone(trimmed)) {
       setLookupHint("")
+      setOrderHistory([])
       return
     }
 
+    const requestId = ++lookupRequestIdRef.current
     setLookupLoading(true)
     try {
       const res = await fetch(
-        `/api/cs/konsumen-by-phone?telepon=${encodeURIComponent(trimmed)}`
+        `/api/cs/konsumen-lookup?phone=${encodeURIComponent(trimmed)}`
       )
       const data = await res.json()
 
+      if (requestId !== lookupRequestIdRef.current) return
+
       if (!res.ok) {
         setLookupHint("")
+        setOrderHistory([])
         return
       }
 
       if (!data.found) {
         setLookupHint("Konsumen baru — nomor belum pernah terdaftar.")
+        setOrderHistory([])
         return
       }
 
-      setLookupHint(
-        `Konsumen dikenali: ${data.namaKonsumen} (order terakhir ${new Date(data.lastOrderAt).toLocaleDateString("id-ID")}).`
-      )
+      const lastDate = data.history?.[0]?.createdAt
+      const lastLabel = lastDate
+        ? new Date(lastDate).toLocaleDateString("id-ID")
+        : "—"
 
-      if (!namaKonsumen.trim()) {
-        setNamaKonsumen(data.namaKonsumen ?? "")
-      }
-      if (!alamat.trim()) {
-        setAlamat(data.alamatPengiriman ?? "")
-      }
+      setLookupHint(
+        `Konsumen dikenali: ${data.nama} (order terakhir ${lastLabel}).`
+      )
+      setNamaKonsumen(data.nama ?? "")
+      setAlamat(data.alamat ?? "")
+      setOrderHistory(Array.isArray(data.history) ? data.history : [])
+      clearFieldError("namaKonsumen")
+      clearFieldError("alamat")
     } catch {
+      if (requestId !== lookupRequestIdRef.current) return
       setLookupHint("")
+      setOrderHistory([])
     } finally {
-      setLookupLoading(false)
+      if (requestId === lookupRequestIdRef.current) {
+        setLookupLoading(false)
+      }
     }
   }
 
@@ -215,6 +346,7 @@ export default function TambahDesainPage() {
         body: JSON.stringify({
           namaCs,
           csId,
+          csUsername,
           namaKonsumen: namaKonsumen.trim(),
           telepon: telepon.trim(),
           alamat: alamat.trim(),
@@ -223,6 +355,8 @@ export default function TambahDesainPage() {
             spp: a.spp.trim() || undefined,
             catatanDesain: a.catatanDesain.trim() || undefined,
             perluDtf: a.perluDtf,
+            perluKancing: a.perluKancing,
+            perluProving: a.perluProving,
             catatanDtf: a.perluDtf ? a.catatanDtf.trim() || undefined : undefined,
             desainUtama: a.desainUtama,
             logoSponsor: a.logoSponsor,
@@ -281,6 +415,38 @@ export default function TambahDesainPage() {
             Informasi konsumen
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
+            <label className="block text-sm md:col-span-2">
+              <span className="mb-1 block text-zinc-400">
+                No. telepon <span className="text-red-400">*</span>
+              </span>
+              <input
+                ref={phoneInputRef}
+                className={`neo-input ${fieldErrorClass(Boolean(fieldErrors?.telepon))}`}
+                value={telepon}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setTelepon(value)
+                  clearFieldError("telepon")
+                  setLookupHint("")
+                  setOrderHistory([])
+                  scheduleKonsumenLookup(value)
+                }}
+                onBlur={(e) => {
+                  if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current)
+                  void lookupKonsumenByPhone(e.target.value)
+                }}
+                placeholder="082112341234 atau +62 821-1234-1234"
+                aria-invalid={Boolean(fieldErrors?.telepon)}
+              />
+              {fieldErrors?.telepon ? (
+                <p className="mt-1 text-xs text-red-400">{fieldErrors.telepon}</p>
+              ) : null}
+              {lookupLoading ? (
+                <p className="mt-1 text-xs text-orange-400">Mencari data konsumen…</p>
+              ) : lookupHint ? (
+                <p className="mt-1 text-xs text-sky-300">{lookupHint}</p>
+              ) : null}
+            </label>
             <label className="block text-sm">
               <span className="mb-1 block text-zinc-400">
                 Nama konsumen <span className="text-red-400">*</span>
@@ -296,31 +462,6 @@ export default function TambahDesainPage() {
               />
               {fieldErrors?.namaKonsumen ? (
                 <p className="mt-1 text-xs text-red-400">{fieldErrors.namaKonsumen}</p>
-              ) : null}
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-zinc-400">
-                No. telepon <span className="text-red-400">*</span>
-              </span>
-              <input
-                className={`neo-input ${fieldErrorClass(Boolean(fieldErrors?.telepon))}`}
-                value={telepon}
-                onChange={(e) => {
-                  setTelepon(e.target.value)
-                  clearFieldError("telepon")
-                  setLookupHint("")
-                }}
-                onBlur={(e) => lookupKonsumenByPhone(e.target.value)}
-                placeholder="082112341234 atau +62 821-1234-1234"
-                aria-invalid={Boolean(fieldErrors?.telepon)}
-              />
-              {fieldErrors?.telepon ? (
-                <p className="mt-1 text-xs text-red-400">{fieldErrors.telepon}</p>
-              ) : null}
-              {lookupLoading ? (
-                <p className="mt-1 text-xs text-orange-400">Mencari data konsumen…</p>
-              ) : lookupHint ? (
-                <p className="mt-1 text-xs text-sky-300">{lookupHint}</p>
               ) : null}
             </label>
             <label className="block text-sm md:col-span-2">
@@ -343,6 +484,70 @@ export default function TambahDesainPage() {
           </div>
         </div>
 
+        {orderHistory.length > 0 ? (
+          <div className="neo-card p-5 md:p-6">
+            <h2 className="mb-1 text-lg font-semibold text-white">
+              Riwayat order
+            </h2>
+            <p className="mb-4 text-sm text-zinc-500">
+              Artikel yang pernah dipesan dengan nomor ini. Klik order ulang untuk
+              mengisi form dengan desain yang sama.
+            </p>
+            <div className="space-y-3">
+              {orderHistory.map((item) => (
+                <div
+                  key={item.designQueueItemId}
+                  className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 sm:flex-row sm:items-center"
+                >
+                  <div className="flex min-w-0 flex-1 gap-3">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md border border-zinc-700 bg-zinc-900">
+                      {item.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.previewUrl}
+                          alt={`Preview ${item.namaArtikel}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-[10px] text-zinc-600">
+                          Tanpa preview
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-white">
+                        {item.namaArtikel}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {item.artikelId}
+                        {item.jenisOrder ? ` · ${item.jenisOrder}` : ""}
+                        {item.jenisProduksi ? ` · ${item.jenisProduksi}` : ""}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {new Date(item.createdAt).toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                        {" · "}
+                        {statusLabel(item.statusDesain)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => applyOrderUlang(item)}
+                    className="shrink-0 rounded-lg border border-orange-500/40 px-3 py-2 text-sm font-semibold text-orange-300 hover:border-orange-400 hover:bg-orange-500/10"
+                  >
+                    Order ulang
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div ref={artikelSectionRef} className="space-y-6">
         {artikels.map((artikel, index) => (
           <div key={index} className="neo-card p-5 md:p-6">
             <div className="mb-4 flex items-center justify-between">
@@ -392,10 +597,16 @@ export default function TambahDesainPage() {
               <label className="block text-sm">
                 <span className="mb-1 block text-zinc-400">No. SPP</span>
                 <input
-                  className="neo-input"
+                  className="neo-input bg-zinc-900/60 text-zinc-300"
                   value={artikel.spp}
-                  onChange={(e) => updateArtikel(index, { spp: e.target.value })}
+                  readOnly
+                  aria-readonly
                 />
+                <p className="mt-1 text-xs text-zinc-500">
+                  {sppLoading && index === 0
+                    ? "Membuat nomor SPP otomatis…"
+                    : "Nomor SPP otomatis"}
+                </p>
               </label>
               <label className="block text-sm md:col-span-2">
                 <span className="mb-1 block text-zinc-400">Catatan desain</span>
@@ -408,19 +619,41 @@ export default function TambahDesainPage() {
                 />
               </label>
               <div className="md:col-span-2 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
-                <label className="flex items-center gap-2 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    checked={artikel.perluDtf}
-                    onChange={(e) =>
-                      updateArtikel(index, {
-                        perluDtf: e.target.checked,
-                        catatanDtf: e.target.checked ? artikel.catatanDtf : "",
-                      })
-                    }
-                  />
-                  Perlu DTF
-                </label>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <label className="flex items-center gap-2 text-sm text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={artikel.perluDtf}
+                      onChange={(e) =>
+                        updateArtikel(index, {
+                          perluDtf: e.target.checked,
+                          catatanDtf: e.target.checked ? artikel.catatanDtf : "",
+                        })
+                      }
+                    />
+                    Perlu DTF
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={artikel.perluKancing}
+                      onChange={(e) =>
+                        updateArtikel(index, { perluKancing: e.target.checked })
+                      }
+                    />
+                    Perlu kancing
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={artikel.perluProving}
+                      onChange={(e) =>
+                        updateArtikel(index, { perluProving: e.target.checked })
+                      }
+                    />
+                    Perlu proving
+                  </label>
+                </div>
                 {artikel.perluDtf ? (
                   <label className="block text-sm">
                     <span className="mb-1 block text-zinc-400">Catatan DTF</span>
@@ -473,6 +706,7 @@ export default function TambahDesainPage() {
             </div>
           </div>
         ))}
+        </div>
 
         {saveError ? (
           <div

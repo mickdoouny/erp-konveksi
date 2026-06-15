@@ -8,13 +8,13 @@ Panduan singkat agar CS dan desainer bisa masuk ERP dari HP/laptop di jaringan y
    ```bash
    npm run dev:lan
    ```
-   Script ini sama dengan `next dev --hostname 0.0.0.0 --port 3000` (lihat `package.json`).
+   Script ini default mengikat **semua interface** (`0.0.0.0:3000`) bila `.env` berisi `ERP_LAN_BIND_ALL=true` (disarankan untuk akses LAN). Operator tetap buka **`http://IP-PC:3000/login`** (mis. `192.168.1.23`). Set `ERP_LAN_HOST` ke IPv4 PC untuk URL di log. Matikan `ERP_LAN_BIND_ALL` hanya jika port 3000 bentrok dengan app Next lain di PC yang sama. Lihat `scripts/dev-lan.mjs`.
 
 2. **Wi‑Fi sama** — HP operator dan PC server harus satu jaringan (mis. router kantor).
 
 3. **Firewall Windows** — izinkan Node/Next.js pada port **3000** untuk jaringan privat, atau matikan sementara untuk uji.
 
-4. **IP PC** — contoh di dokumentasi ini: `192.168.0.16`. Cek di CMD: `ipconfig` → IPv4 Address.
+4. **IP PC** — contoh di dokumentasi ini: `192.168.1.23`. Cek di CMD: `ipconfig` → IPv4 Address. Set `ERP_LAN_HOST` di `.env` jika IP berubah.
 
 ## Alur login (satu jalur)
 
@@ -29,18 +29,18 @@ Jangan pakai bookmark lama ke `/login/session-bridge` — rute itu sudah tidak d
 
 ## URL untuk operator
 
-Ganti `192.168.0.16` jika IP PC berbeda.
+Ganti `192.168.1.23` jika IP PC berbeda.
 
 | Peran    | Username   | Password demo | URL setelah login        |
 |----------|------------|---------------|---------------------------|
-| CS       | `cs1`      | `12345`       | `http://192.168.0.16:3000/cs/antrian-desain` |
+| CS       | `cs1`      | `12345`       | `http://192.168.1.23:3000/cs/antrian-desain` |
 | CS       | `cs2`      | `12345`       | sama (antrian desain)     |
-| Desainer | `desainer1`| `12345`       | `http://192.168.0.16:3000/desainer/antrian` |
+| Desainer | `desainer1`| `12345`       | `http://192.168.1.23:3000/desainer/antrian` |
 
 **Halaman login (wajib untuk masuk):**
 
 ```
-http://192.168.0.16:3000/login
+http://192.168.1.23:3000/login
 ```
 
 ## Akun demo (password sama)
@@ -58,7 +58,7 @@ Password demo hanya untuk latihan; ganti saat production.
 Setelah login berhasil, di terminal `npm run dev:lan` muncul kira-kira:
 
 ```
-[login] success cs1 role= cs host= 192.168.0.16:3000
+[login] success cs1 role= cs host= 192.168.1.23:3000
 ```
 
 Login gagal:
@@ -74,16 +74,41 @@ Login gagal:
 | Buka `/login` langsung ke antrian CS | Cookie `erp_user` dari sesi sebelumnya (perilaku lama) | Update kode terbaru: form login tetap tampil + banner sesi. Ganti akun: **Logout & ganti akun** lalu login `cs2` / `desainer1`. |
 | Langsung kembali ke login | Cookie `erp_user` tidak ada / username salah | Username demo huruf kecil (`cs1`, `desainer1`). Password `12345`. Keyboard HP boleh kapital huruf pertama — server menormalkan ke huruf kecil. |
 | Layar error / putih setelah login CS | Crash halaman antrian CS (sudah diperbaiki) | Update kode; login ulang `cs1` → antrian desain harus tampil. |
-| Halaman kosong / asset error di LAN | Origin dev tidak diizinkan | `next.config.ts` sudah memuat `192.168.0.16` dan `192.168.0.16:3000` di `allowedDevOrigins`. Tambah IP lewat env `ALLOWED_DEV_ORIGINS` jika IP PC berubah. |
+| Halaman kosong / asset error di LAN | Origin dev tidak diizinkan | `next.config.ts` sudah memuat `192.168.1.23` dan `192.168.1.23:3000` di `allowedDevOrigins`. Tambah IP lewat env `ALLOWED_DEV_ORIGINS` jika IP PC berubah. |
+| `localhost:3000/login` → 404 di PC server | Port 3000 dipakai app lain (`0.0.0.0:3000`) | ERP LAN hanya di **`http://IP-PC:3000/login`** (mis. `192.168.1.23`). Jangan uji ERP lewat `localhost` jika ada app lain di port yang sama. |
 | Bookmark `/api/login` atau GET ke API | Bookmark salah | Hapus bookmark; buka **`/login`** dan submit form. |
 | `error=session` di URL | Middleware tidak melihat cookie | Login ulang dari `/login`; cek Wi‑Fi dan IP. |
 | `error=invalid_credentials` | Username/password salah | Lihat tabel akun demo. |
 | `error=server_error` | DB operator tidak bisa dihubungi | Pakai akun demo `cs1` / `desainer1` atau perbaiki koneksi DB. |
+
+### Port tidak bisa diakses dari PC lain (ping OK, port gagal)
+
+1. Di **PC server**, pastikan listen di semua interface:
+   ```powershell
+   netstat -ano | findstr :3000
+   ```
+   Harus ada `0.0.0.0:3000` atau `[::]:3000` LISTENING setelah `ERP_LAN_BIND_ALL=true` + `npm run dev:lan`.
+
+2. Jalankan firewall (Administrator):
+   ```powershell
+   cd C:\Users\Jazzy\erp-konveksi
+   .\scripts\allow-lan-port-3000.ps1
+   ```
+
+3. Dari **PC client** (mis. `192.168.1.5`):
+   ```powershell
+   Test-NetConnection 192.168.1.23 -Port 3000
+   ```
+   `TcpTestSucceeded : True` lalu buka `http://192.168.1.23:3000/login`.
+
+4. Jika masih `False` padahal firewall Windows profil **Disabled**: cek **AP isolation** di router Wi-Fi, antivirus, atau coba port alternatif `ERP_DEV_PORT=3001` di `.env` lalu `.\scripts\allow-lan-port-3000.ps1 -Port 3001`.
+
+
 | Layar putih setelah login desainer | Crash React di halaman antrian (sudah diperbaiki) | Update kode terbaru; login ulang `desainer1` → `/desainer/antrian`. |
 
 ### Debug sesi (opsional)
 
-Untuk tim IT: buka `http://192.168.0.16:3000/login?debug=1` — panel menampilkan cookie `erp_user` dan `localStorage`, tanpa mengganggu operator biasa.
+Untuk tim IT: buka `http://192.168.1.23:3000/login?debug=1` — panel menampilkan cookie `erp_user` dan `localStorage`, tanpa mengganggu operator biasa.
 
 ### Logout
 
@@ -103,8 +128,8 @@ curl.exe -c c-cs.txt -X POST "http://127.0.0.1:3000/api/login" -H "Content-Type:
 curl.exe -b c-cs.txt "http://127.0.0.1:3000/cs/antrian-desain" -I
 
 # Desainer (LAN)
-curl.exe -c c-dsn.txt -X POST "http://192.168.0.16:3000/api/login" -H "Content-Type: application/x-www-form-urlencoded" -d "username=desainer1&password=12345" -v
-curl.exe -b c-dsn.txt "http://192.168.0.16:3000/desainer/antrian" -I
+curl.exe -c c-dsn.txt -X POST "http://192.168.1.23:3000/api/login" -H "Content-Type: application/x-www-form-urlencoded" -d "username=desainer1&password=12345" -v
+curl.exe -b c-dsn.txt "http://192.168.1.23:3000/desainer/antrian" -I
 ```
 
 Harapan:
@@ -115,3 +140,4 @@ Harapan:
 ## Keluar / ganti operator
 
 Gunakan **Logout** di sidebar aplikasi, atau **Logout & ganti akun** di halaman `/login`. Keduanya memanggil `clearClientSession()` + **POST** `/api/logout` sehingga cookie `erp_user` hilang dan form login tampil lagi. Jangan hanya menutup tab tanpa logout jika HP dipakai bergantian.
+

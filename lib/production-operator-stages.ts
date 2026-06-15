@@ -1,22 +1,40 @@
 import { ProductionStatus } from "@prisma/client"
-import type { OperatorDepartment } from "@/lib/operators"
 
-/** Tahap produksi per halaman operator divisi. */
+/** Workstation grouping for operator UI (DB pipeline stages stay granular). */
+export const PRODUKSI_OPERATOR_DEPARTMENTS = [
+  "PREPRESS",
+  "PREPARE",
+  "PRESS",
+  "JAHIT",
+  "FINISHING",
+] as const
+
+export type ProduksiOperatorDepartment =
+  (typeof PRODUKSI_OPERATOR_DEPARTMENTS)[number]
+
+/** Legacy operatorDepartment / divisi values mapped to a workstation. */
+const LEGACY_DEPARTMENT_ALIASES: Record<string, ProduksiOperatorDepartment> = {
+  SETTING: "PREPRESS",
+  LAYOUT: "PREPRESS",
+}
+
 export const DEPARTMENT_STAGES: Record<
-  Exclude<
-    OperatorDepartment,
-    "SALES" | "DESAINER" | "FINISHING"
-  >,
+  ProduksiOperatorDepartment,
   ProductionStatus[]
 > = {
-  SETTING: [ProductionStatus.SETTING],
-  LAYOUT: [ProductionStatus.LAYOUT_PRINT, ProductionStatus.PRINTING],
+  PREPRESS: [
+    ProductionStatus.SETTING,
+    ProductionStatus.MENUNGGU_ACC_SETTING,
+    ProductionStatus.LAYOUT_PRINT,
+    ProductionStatus.PRINTING,
+  ],
   PREPARE: [
     ProductionStatus.POTONG_KERTAS,
     ProductionStatus.PREPARE_BAHAN_KAIN,
   ],
   PRESS: [ProductionStatus.PRESS],
   JAHIT: [ProductionStatus.JAHIT],
+  FINISHING: [ProductionStatus.FINISHING],
 }
 
 export type OperatorStageAction = {
@@ -29,7 +47,7 @@ export const STAGE_OPERATOR_ACTIONS: Partial<
 > = {
   [ProductionStatus.SETTING]: {
     startLabel: "Proses setting",
-    completeLabel: "Selesai setting",
+    completeLabel: "Kirim ke CS",
   },
   [ProductionStatus.LAYOUT_PRINT]: {
     startLabel: "Proses layout",
@@ -44,8 +62,8 @@ export const STAGE_OPERATOR_ACTIONS: Partial<
     completeLabel: "Potong kertas selesai",
   },
   [ProductionStatus.PREPARE_BAHAN_KAIN]: {
-    startLabel: "Preparing bahan",
-    completeLabel: "Preparing selesai",
+    startLabel: "Proses potong bahan",
+    completeLabel: "Selesai potong bahan",
   },
   [ProductionStatus.PRESS]: {
     startLabel: "Proses press",
@@ -55,37 +73,42 @@ export const STAGE_OPERATOR_ACTIONS: Partial<
     startLabel: "Proses jahit",
     completeLabel: "Selesai jahit",
   },
+  [ProductionStatus.FINISHING]: {
+    startLabel: "Mulai QC",
+    completeLabel: "QC lulus",
+  },
 }
 
 export const PRODUKSI_PAGE_BY_DEPARTMENT: Record<
-  Exclude<
-    OperatorDepartment,
-    "SALES" | "DESAINER" | "FINISHING"
-  >,
+  ProduksiOperatorDepartment,
   string
 > = {
-  SETTING: "/produksi/setting",
-  LAYOUT: "/produksi/printing",
+  PREPRESS: "/produksi/printing",
   PREPARE: "/produksi/preparing",
   PRESS: "/produksi/press",
   JAHIT: "/produksi/jahit",
+  FINISHING: "/produksi/qc",
+}
+
+/** Old operator URLs — redirect to combined workstation pages. */
+export const LEGACY_PRODUKSI_PAGE_REDIRECTS: Record<string, string> = {
+  "/produksi/setting": "/produksi/printing",
+  "/produksi/prepress": "/produksi/printing",
 }
 
 export const PRODUKSI_PAGE_TITLES: Record<
-  keyof typeof PRODUKSI_PAGE_BY_DEPARTMENT,
+  ProduksiOperatorDepartment,
   { title: string; description: string }
 > = {
-  SETTING: {
-    title: "Setting",
-    description: "Antrian order tahap setting — proses dan selesaikan sebelum printing.",
-  },
-  LAYOUT: {
-    title: "Printing",
-    description: "Layout & printing — proses layout lalu printing sebelum preparing.",
+  PREPRESS: {
+    title: "Printing (Setting-Layout-Print)",
+    description:
+      "Antrian workstation printing — setting, layout, dan printing dalam satu antrian.",
   },
   PREPARE: {
-    title: "Preparing",
-    description: "Potong kertas dan preparing bahan kain sebelum press.",
+    title: "Preparing (Potong kertas-Bahan)",
+    description:
+      "Potong kertas dan preparing bahan kain sebelum press — satu antrian workstation.",
   },
   PRESS: {
     title: "Press",
@@ -95,25 +118,53 @@ export const PRODUKSI_PAGE_TITLES: Record<
     title: "Jahit",
     description: "Antrian jahit — selesai jahit dikembalikan ke Admin Produksi.",
   },
+  FINISHING: {
+    title: "QC",
+    description: "Quality control — periksa barang sebelum packing dan siap kirim.",
+  },
 }
 
 export function stagesForDepartment(
   department: string
 ): ProductionStatus[] | null {
-  if (department in DEPARTMENT_STAGES) {
-    return DEPARTMENT_STAGES[
-      department as keyof typeof DEPARTMENT_STAGES
-    ]
-  }
-  return null
+  const resolved =
+    LEGACY_DEPARTMENT_ALIASES[department] ??
+    (department in DEPARTMENT_STAGES
+      ? (department as ProduksiOperatorDepartment)
+      : null)
+  if (!resolved) return null
+  return DEPARTMENT_STAGES[resolved]
 }
 
-export function departmentFromDivisi(divisi: string): string | null {
+export function departmentFromDivisi(divisi: string): ProduksiOperatorDepartment | null {
   const lower = divisi.toLowerCase()
-  if (lower.includes("setting")) return "SETTING"
-  if (lower.includes("print") || lower.includes("layout")) return "LAYOUT"
+  if (
+    lower.includes("prepress") ||
+    lower.includes("printing") ||
+    lower.includes("setting") ||
+    lower.includes("print") ||
+    lower.includes("layout")
+  ) {
+    return "PREPRESS"
+  }
   if (lower.includes("prepare") || lower.includes("preparing")) return "PREPARE"
   if (lower.includes("press")) return "PRESS"
   if (lower.includes("jahit")) return "JAHIT"
+  if (lower.includes("qc") || lower.includes("finishing")) return "FINISHING"
   return null
+}
+
+export function resolveProduksiDepartment(user: {
+  operatorDepartment?: string
+  divisi?: string
+}): ProduksiOperatorDepartment | null {
+  if (user.operatorDepartment) {
+    const mapped =
+      LEGACY_DEPARTMENT_ALIASES[user.operatorDepartment] ??
+      user.operatorDepartment
+    if (mapped in PRODUKSI_PAGE_BY_DEPARTMENT) {
+      return mapped as ProduksiOperatorDepartment
+    }
+  }
+  return user.divisi ? departmentFromDivisi(user.divisi) : null
 }

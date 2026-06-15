@@ -19,6 +19,7 @@ import {
 import { isCsAntrianProduksiItem } from "@/lib/cs-antrian-produksi"
 import type { DesignQueueMessageRecord } from "@/lib/design-queue-notes"
 import { withCsApiScope } from "@/lib/cs-api-scope"
+import { formatQueueItemSubtitle } from "@/lib/cs-queue-identifiers"
 
 type DetailItem = DesignQueueItemRecord & {
   messages?: DesignQueueMessageRecord[]
@@ -210,7 +211,12 @@ export default function CsAntrianDesainDetailPage() {
   return (
     <CsShell
       title="Detail antrian desain"
-      description={`${item.designId} · ${item.artikelId}`}
+      description={formatQueueItemSubtitle({
+        sppNumber: item.sppNumber,
+        artikelId: item.artikelId,
+        namaArtikel: item.namaArtikel,
+        designId: item.designId,
+      })}
       actions={
         <Link
           href="/cs/antrian-desain"
@@ -236,7 +242,7 @@ export default function CsAntrianDesainDetailPage() {
             namaKonsumen: item.namaKonsumen,
             noTelepon: item.noTelepon,
             alamatPengiriman: item.alamatPengiriman,
-            sppGroupId: item.sppGroupId,
+            sppNumber: item.sppNumber,
           })
         }
       />

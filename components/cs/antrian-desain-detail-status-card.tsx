@@ -8,6 +8,7 @@ import {
   type CsAntrianDesainDetailGuidance,
   type DesignQueueItemRecord,
 } from "@/lib/cs-antrian-desain"
+import { QueueIdentifierBadges } from "@/components/cs/queue-identifier-badges"
 
 type AntrianDesainDetailStatusCardProps = {
   item: DesignQueueItemRecord & {
@@ -64,13 +65,13 @@ export function AntrianDesainDetailStatusCard({
             </span>
           </p>
         </div>
-        <div className="text-right text-xs text-zinc-500">
-          <p>{item.designId}</p>
-          <p className="mt-0.5">{item.artikelId}</p>
-          {item.sppGroupId ? (
-            <p className="mt-1 font-mono text-zinc-400">Grup: {item.sppGroupId}</p>
-          ) : null}
-        </div>
+        <QueueIdentifierBadges
+          sppNumber={item.sppNumber}
+          artikelId={item.artikelId}
+          namaArtikel={item.namaArtikel}
+          designId={item.designId}
+          variant="card"
+        />
       </div>
 
       {guidance ? (
@@ -110,7 +111,9 @@ export function AntrianDesainDetailStatusCard({
           <dt className="text-xs text-zinc-500">Artikel</dt>
           <dd className="mt-1 font-medium text-zinc-200">{item.namaArtikel}</dd>
           {item.sppNumber ? (
-            <dd className="mt-0.5 text-xs text-zinc-500">SPP: {item.sppNumber}</dd>
+            <dd className="mt-0.5 text-xs text-zinc-500">
+              No. SPP: {item.sppNumber}
+            </dd>
           ) : null}
         </div>
         <div>

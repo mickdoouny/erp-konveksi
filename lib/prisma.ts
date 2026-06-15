@@ -19,7 +19,15 @@ function isStalePrismaClient(client: PrismaClient): boolean {
       string,
       unknown
     >
-    return !("hargaStelan" in orderFields) || !("jenisItem" in rosterFields)
+    const pipelineFields = client.productionPipeline.fields as Record<
+      string,
+      unknown
+    >
+    return (
+      !("hargaStelan" in orderFields) ||
+      !("jenisItem" in rosterFields) ||
+      !("settingResultFiles" in pipelineFields)
+    )
   } catch {
     return true
   }

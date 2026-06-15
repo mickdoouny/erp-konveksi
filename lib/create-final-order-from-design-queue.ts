@@ -72,8 +72,9 @@ export async function createFinalOrderFromDesignQueue(
   const productionNumber = generateProductionNumber(orderCount + 1)
   const invoiceNumber = generateInvoiceNumber(orderCount + 1)
 
-  const needsKancing = Boolean(input.needsKancing)
+  const needsKancing = Boolean(input.needsKancing ?? item.perluKancing)
   const needsDTF = Boolean(input.needsDTF ?? item.perluDtf)
+  const needsProving = Boolean(item.perluProving)
   const jenisProduksi: JenisProduksi = parseJenisProduksi(input.jenisProduksi)
 
   await prisma.$transaction(async (tx) => {
@@ -109,6 +110,7 @@ export async function createFinalOrderFromDesignQueue(
         expressPriority: productionFields.expressPriority,
         needsKancing,
         needsDTF,
+        needsProving,
         fileDesainFinal: item.fileDesainProduksi,
         catatanProduksi: input.catatanFinishing ?? item.catatanFinishing,
         hargaSatuan,
@@ -158,6 +160,7 @@ export async function createFinalOrderFromDesignQueue(
             adminProduksiStatus: AdminProduksiStatus.PENDING,
             needsKancing,
             needsDTF,
+            needsProving,
             deadline: input.tanggalDeadline
               ? new Date(input.tanggalDeadline)
               : item.tanggalDeadline,
@@ -194,7 +197,7 @@ export async function createFinalOrderFromDesignQueue(
     })
   }, HEAVY_TRANSACTION_OPTIONS)
 
-  await ensureDefaultStagePlans(pipelineId, needsKancing, needsDTF)
+  await ensureDefaultStagePlans(pipelineId)
 
   return prisma.finalOrder.findUnique({
     where: { id: orderId },

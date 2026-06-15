@@ -16,7 +16,7 @@ function parseAllowedDevOrigin(entry: string): string | null {
 /** LAN hostnames for operator phones in `npm run dev:lan` (Next.js blocks dev assets otherwise). */
 const allowedDevOrigins = (
   process.env.ALLOWED_DEV_ORIGINS ??
-  "192.168.0.16,192.168.0.16:3000,127.0.0.1:3000,localhost:3000"
+  "192.168.1.23,192.168.1.23:3000,127.0.0.1:3000,localhost:3000"
 )
   .split(",")
   .map(parseAllowedDevOrigin)

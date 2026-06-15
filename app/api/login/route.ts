@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
 import type { AuthUser } from "@/lib/auth"
-import { homePathByRole } from "@/lib/auth"
+import { homePathForUser } from "@/lib/auth-redirect"
 import {
   serializePendingUser,
   userSessionCookieOptions,
   USER_SESSION_COOKIE,
 } from "@/lib/login-session"
-import { redirectUrl } from "@/lib/request-origin"
+import { relativeRedirectResponse } from "@/lib/request-origin"
 import { normalizeLoginUsername, resolveLogin } from "@/lib/resolve-login"
 
 function isFormSubmission(request: Request): boolean {
@@ -83,21 +83,16 @@ function loginErrorRedirect(
   credentials?: { username: string; password: string },
   formData?: FormData
 ) {
-  return NextResponse.redirect(
-    redirectUrl(
-      request,
-      "/login",
-      loginRedirectSearch(request, { error: code }, credentials, formData)
-    ),
-    { status: 303 }
+  return relativeRedirectResponse(
+    "/login",
+    loginRedirectSearch(request, { error: code }, credentials, formData),
+    303
   )
 }
 
-function loginSuccessRedirect(request: Request, user: AuthUser) {
-  const home = homePathByRole(user.role)
-  const response = NextResponse.redirect(redirectUrl(request, home), {
-    status: 303,
-  })
+function loginSuccessRedirect(user: AuthUser) {
+  const home = homePathForUser(user)
+  const response = relativeRedirectResponse(home, undefined, 303)
   response.cookies.set(
     USER_SESSION_COOKIE,
     serializePendingUser(user),
@@ -179,7 +174,7 @@ export async function POST(request: Request) {
   )
 
   if (formSubmission) {
-    return loginSuccessRedirect(request, result.user)
+    return loginSuccessRedirect(result.user)
   }
 
   const response = NextResponse.json(result.user)
@@ -192,11 +187,6 @@ export async function POST(request: Request) {
 }
 
 /** Bookmarked GET /api/login (common on phones) → back to the HTML form. */
-export async function GET(request: Request) {
-  return NextResponse.redirect(
-    redirectUrl(request, "/login", {
-      error: "invalid_request",
-    }),
-    { status: 303 }
-  )
+export async function GET() {
+  return relativeRedirectResponse("/login", { error: "invalid_request" }, 303)
 }

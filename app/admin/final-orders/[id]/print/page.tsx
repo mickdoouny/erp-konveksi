@@ -27,6 +27,8 @@ type OrderDetail = {
   jenisOrder: string | null
   deadline: string | null
   submittedAt: string | null
+  needsKancing: boolean
+  needsDTF: boolean
   FinalOrderRosterLine: Array<{
     nama: string
     ukuran: string | null
@@ -41,6 +43,7 @@ type OrderDetail = {
     desainUtama: string | null
     hasilDesain: string | null
     materiDesain: string | null
+    catatanDtf: string | null
   } | null
 }
 
@@ -134,6 +137,17 @@ export default function FinalOrderPrintPage() {
       grup: line.grup,
     }))
 
+    const productionNotes: Array<{ label: string; detail?: string | null }> = []
+    if (order.needsKancing) {
+      productionNotes.push({ label: "Perlu kancing" })
+    }
+    if (order.needsDTF) {
+      productionNotes.push({
+        label: "Perlu DTF",
+        detail: order.DesignQueueItem?.catatanDtf?.trim() || null,
+      })
+    }
+
     return {
       namaKonsumen: order.namaKonsumen,
       namaArtikel: order.namaArtikel,
@@ -146,6 +160,7 @@ export default function FinalOrderPrintPage() {
       jenisOrder: order.jenisOrder?.trim() || undefined,
       mockupImages: collectMockupImages(order.DesignQueueItem),
       rosterLines,
+      productionNotes: productionNotes.length > 0 ? productionNotes : undefined,
     }
   }, [order])
 

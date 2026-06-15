@@ -247,6 +247,9 @@ export default function CsInputOrderPage() {
       if (data.perluDtf) {
         setNeedsDTF(true)
       }
+      if (data.perluKancing) {
+        setNeedsKancing(true)
+      }
     } catch {
       setItem(null)
       setLoadError("Gagal memuat antrian. Periksa koneksi lalu coba lagi.")

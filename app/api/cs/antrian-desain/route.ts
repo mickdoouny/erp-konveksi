@@ -17,6 +17,10 @@ import {
   csDesignQueueOwnershipWhere,
   parseCsRequestScope,
 } from "@/lib/cs-design-queue-access"
+import {
+  allocateNextSppNumber,
+  resolveCsUsernameForSpp,
+} from "@/lib/spp-number"
 
 export async function GET(request: Request) {
   try {
@@ -73,9 +77,25 @@ export async function POST(request: Request) {
     const csNama = body.namaCs?.trim() || "CS"
     const now = new Date()
 
+    const explicitSpp = data.artikels
+      .map((artikel) => artikel.spp?.trim())
+      .find(Boolean)
+    let batchSppNumber = explicitSpp ?? null
+    if (!batchSppNumber) {
+      const csUsername = await resolveCsUsernameForSpp({
+        csUsername: body.csUsername,
+        csId: body.csId,
+        db: prisma,
+      })
+      if (csUsername) {
+        batchSppNumber = await allocateNextSppNumber(csUsername, prisma)
+      }
+    }
+
     const created = await prisma.$transaction(
       data.artikels.map((artikel, index) => {
         const artikelId = generateArtikelId(artikelCount + index + 1)
+        const sppNumber = artikel.spp?.trim() || batchSppNumber
 
         return prisma.designQueueItem.create({
           data: {
@@ -90,9 +110,11 @@ export async function POST(request: Request) {
             noTeleponNormalized: data.noTeleponNormalized,
             alamatPengiriman: data.alamat,
             namaArtikel: artikel.namaArtikel.trim(),
-            sppNumber: artikel.spp?.trim() || null,
+            sppNumber: sppNumber || null,
             materiDesain: artikel.catatanDesain?.trim() || null,
             perluDtf: Boolean(artikel.perluDtf),
+            perluKancing: Boolean(artikel.perluKancing),
+            perluProving: Boolean(artikel.perluProving),
             catatanDtf: artikel.catatanDtf?.trim() || null,
             statusDtf: artikel.perluDtf
               ? DtfStatus.MENUNGGU_ORDER

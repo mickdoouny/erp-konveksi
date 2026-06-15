@@ -8,11 +8,18 @@ import { NotificationProvider } from "@/components/notifications/notification-pr
 import { readStoredUser } from "@/lib/auth"
 import { clearClientSession } from "@/lib/login-session"
 import { roleLabel } from "@/lib/roles"
+import {
+  PRODUKSI_PAGE_BY_DEPARTMENT,
+  PRODUKSI_PAGE_TITLES,
+  resolveProduksiDepartment,
+  type ProduksiOperatorDepartment,
+} from "@/lib/production-operator-stages"
 
 type User = {
   nama?: string
   role: string
   divisi?: string
+  operatorDepartment?: string
 }
 
 const linkClass =
@@ -26,10 +33,29 @@ function activeModuleLabel(pathname: string): string | null {
   if (pathname.startsWith("/admin/keuangan")) return "Admin Keuangan"
   if (
     pathname.startsWith("/admin/final-orders") ||
+    pathname.startsWith("/admin/post-jahit") ||
+    pathname.startsWith("/admin/packing") ||
+    pathname.startsWith("/admin/jahit-pembayaran") ||
     pathname.startsWith("/admin/siap-kirim") ||
+    pathname.startsWith("/admin/inventori") ||
+    pathname.startsWith("/admin/rework-requests") ||
     pathname.startsWith("/admin/spp")
   ) {
     return "Admin Produksi"
+  }
+  if (pathname.startsWith("/produksi/")) {
+    const segment = pathname.split("/")[2]
+    const legacyPath = `/produksi/${segment}`
+    const entry = Object.entries(PRODUKSI_PAGE_BY_DEPARTMENT).find(
+      ([, path]) => path === legacyPath
+    )
+    if (entry) {
+      return PRODUKSI_PAGE_TITLES[entry[0] as ProduksiOperatorDepartment].title
+    }
+    if (legacyPath === "/produksi/setting" || legacyPath === "/produksi/prepress") {
+      return PRODUKSI_PAGE_TITLES.PREPRESS.title
+    }
+    return "Produksi"
   }
   if (pathname.startsWith("/cs/antrian-produksi")) return "Antrian Produksi CS"
   if (pathname.startsWith("/cs/antrian-desain")) return "Antrian Desain CS"
@@ -43,8 +69,19 @@ export default function Sidebar() {
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-    const stored = readStoredUser()
-    setUser(stored ? { nama: stored.nama, role: stored.role, divisi: stored.divisi } : null)
+    queueMicrotask(() => {
+      const stored = readStoredUser()
+      setUser(
+        stored
+          ? {
+              nama: stored.nama,
+              role: stored.role,
+              divisi: stored.divisi,
+              operatorDepartment: stored.operatorDepartment,
+            }
+          : null
+      )
+    })
   }, [])
 
   function logout() {
@@ -54,6 +91,11 @@ export default function Sidebar() {
 
   const role = user?.role
   const moduleLabel = activeModuleLabel(pathname)
+  const produksiDepartment =
+    user && role === "produksi" ? resolveProduksiDepartment(user) : null
+  const produksiQueuePath = produksiDepartment
+    ? PRODUKSI_PAGE_BY_DEPARTMENT[produksiDepartment]
+    : null
 
   const notifyRoles = ["cs", "desainer", "admin_keuangan", "admin_produksi", "owner"]
 
@@ -121,8 +163,33 @@ export default function Sidebar() {
                   </Link>
                 </li>
                 <li>
+                  <Link href="/admin/rework-requests" className={linkClass}>
+                    Request Rework
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/post-jahit" className={linkClass}>
+                    Pasca Jahit
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/packing" className={linkClass}>
+                    Packing
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/jahit-pembayaran" className={linkClass}>
+                    Pembayaran Jahit
+                  </Link>
+                </li>
+                <li>
                   <Link href="/admin/siap-kirim" className={linkClass}>
                     Siap Kirim
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/inventori" className={linkClass}>
+                    Inventori Bahan
                   </Link>
                 </li>
                 <li className={labelClass}>CS &amp; Desain</li>
@@ -207,8 +274,33 @@ export default function Sidebar() {
                   </Link>
                 </li>
                 <li>
+                  <Link href="/admin/rework-requests" className={linkClass}>
+                    Request Rework
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/post-jahit" className={linkClass}>
+                    Pasca Jahit
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/packing" className={linkClass}>
+                    Packing
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/jahit-pembayaran" className={linkClass}>
+                    Pembayaran Jahit
+                  </Link>
+                </li>
+                <li>
                   <Link href="/admin/siap-kirim" className={linkClass}>
                     Siap Kirim
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/admin/inventori" className={linkClass}>
+                    Inventori Bahan
                   </Link>
                 </li>
               </>
@@ -216,14 +308,19 @@ export default function Sidebar() {
 
             {role === "produksi" && (
               <>
+                {produksiQueuePath ? (
+                  <li>
+                    <Link href={produksiQueuePath} className={linkClass}>
+                      Antrian{" "}
+                      {produksiDepartment
+                        ? PRODUKSI_PAGE_TITLES[produksiDepartment].title
+                        : "Produksi"}
+                    </Link>
+                  </li>
+                ) : null}
                 <li>
                   <Link href="/report" className={linkClass}>
                     Report Produksi
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/production-progress" className={linkClass}>
-                    Progress Produksi
                   </Link>
                 </li>
               </>

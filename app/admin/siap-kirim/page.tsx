@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { AppShell, AppShellLoading } from "@/components/layout/app-shell"
 import { PageHeader } from "@/components/layout/page-header"
@@ -9,6 +9,9 @@ import { readStoredUser } from "@/lib/auth"
 import { homePathByRole } from "@/lib/auth-redirect"
 import { canAccessAdminProduksiRoutes } from "@/lib/roles"
 import { JenisProduksiBadge } from "@/components/production/jenis-produksi-badge"
+import { ProductionStageBadge } from "@/components/production/production-stage-badge"
+import { usePollingRefresh } from "@/hooks/use-polling-refresh"
+import { labelShipReleaseStatus } from "@/lib/status-labels"
 
 type Row = {
   id: string
@@ -19,6 +22,7 @@ type Row = {
   ProductionPipeline: {
     id: string
     productionNumber: string
+    currentStatus: string
     shipReleaseStatus: string
   }
 }
@@ -30,15 +34,20 @@ export default function AdminSiapKirimPage() {
   const [busyId, setBusyId] = useState("")
   const [actorName, setActorName] = useState("Admin Produksi")
 
-  async function load() {
-    setLoading(true)
-    const res = await fetch("/api/final-orders?queue=siap_kirim", {
-      cache: "no-store",
-    })
-    const json = await res.json()
-    setItems(json.success ? json.data : [])
-    setLoading(false)
-  }
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true)
+    try {
+      const res = await fetch("/api/final-orders?queue=siap_kirim", {
+        cache: "no-store",
+      })
+      const json = await res.json()
+      setItems(json.success ? json.data : [])
+    } catch {
+      setItems([])
+    } finally {
+      if (!options?.silent) setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     const user = readStoredUser()
@@ -51,8 +60,14 @@ export default function AdminSiapKirimPage() {
       return
     }
     setActorName(user.nama ?? "Admin Produksi")
-    load()
-  }, [router])
+    void load()
+  }, [router, load])
+
+  usePollingRefresh(
+    useCallback(() => {
+      void load({ silent: true })
+    }, [load])
+  )
 
   return (
     <AppShell>
@@ -76,15 +91,26 @@ export default function AdminSiapKirimPage() {
                 <p className="text-sm text-zinc-400">
                   {row.orderNumber} · {row.ProductionPipeline.productionNumber}
                 </p>
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <ProductionStageBadge
+                    status={row.ProductionPipeline.currentStatus}
+                  />
                   <JenisProduksiBadge
                     jenisProduksi={row.jenisProduksi}
                     expressPriority={row.expressPriority}
                   />
                 </div>
+                {row.ProductionPipeline.shipReleaseStatus !== "NONE" ? (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    {labelShipReleaseStatus(row.ProductionPipeline.shipReleaseStatus)}
+                  </p>
+                ) : null}
               </div>
               <BtnApprove
-                disabled={busyId === row.ProductionPipeline.id}
+                disabled={
+                  busyId === row.ProductionPipeline.id ||
+                  row.ProductionPipeline.shipReleaseStatus === "MENUNGGU_VALIDASI"
+                }
                 onClick={async () => {
                   setBusyId(row.ProductionPipeline.id)
                   await fetch(`/api/production-pipeline/${row.ProductionPipeline.id}`, {

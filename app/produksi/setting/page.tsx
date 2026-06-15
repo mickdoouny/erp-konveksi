@@ -1,5 +1,5 @@
-import { OperatorQueuePage } from "@/components/production/operator-queue-page"
+import { redirect } from "next/navigation"
 
 export default function ProduksiSettingPage() {
-  return <OperatorQueuePage department="SETTING" />
+  redirect("/produksi/printing")
 }

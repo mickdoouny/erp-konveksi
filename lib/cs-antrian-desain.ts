@@ -34,6 +34,8 @@ export type DesignQueueItemRecord = {
   statusDesain: string
   fileDesainProduksi?: string | null
   perluDtf?: boolean
+  perluKancing?: boolean
+  perluProving?: boolean
   catatanDtf?: string | null
   statusDtf?: string
   fileDtfVendor?: string | null
@@ -161,12 +163,15 @@ export type CreateArtikelInput = {
   spp?: string
   catatanDesain?: string
   perluDtf?: boolean
+  perluKancing?: boolean
+  perluProving?: boolean
   catatanDtf?: string
   desainUtama?: DesignFile[]
   logoSponsor?: DesignFile[]
 }
 
 export type CreateDesignBatchInput = {
+  csUsername?: string
   namaCs: string
   csId?: string
   namaKonsumen: string
@@ -353,7 +358,7 @@ export type EditKonsumenPrefill = {
   namaKonsumen: string
   noTelepon?: string | null
   alamatPengiriman?: string | null
-  sppGroupId?: string | null
+  sppNumber?: string | null
 }
 
 export type CsEditKonsumenInput = {

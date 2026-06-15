@@ -12,17 +12,30 @@ export const ADMIN_PRODUKSI_STATUS_LABELS: Record<string, string> = {
   REJECTED: "Ditolak",
 }
 
+export const SHIP_RELEASE_STATUS_LABELS: Record<string, string> = {
+  NONE: "Belum diajukan",
+  MENUNGGU_VALIDASI: "Menunggu izin kirim",
+  DISETUJUI: "Izin kirim disetujui",
+  DITOLAK: "Izin kirim ditolak",
+}
+
+export const DELIVERY_STATUS_LABELS: Record<string, string> = {
+  BELUM_KIRIM: "Belum kirim",
+  TERKIRIM: "Terkirim",
+}
+
 export const PRODUCTION_STATUS_LABELS: Record<string, string> = {
   ADMIN_PRODUKSI: "Admin Produksi",
   SETTING: "Setting",
+  MENUNGGU_ACC_SETTING: "Menunggu ACC konsumen",
   LAYOUT_PRINT: "Layout",
   PRINTING: "Printing",
-  PREPARE_BAHAN_KAIN: "Prepare bahan",
+  PREPARE_BAHAN_KAIN: "Potong bahan",
   POTONG_KERTAS: "Potong kertas",
   TIMBANG_HASIL_POTONG: "Timbang potong",
   PRESS: "Press",
   JAHIT: "Jahit",
-  FINISHING: "Finishing",
+  FINISHING: "QC",
   KANCING: "Kancing",
   DTF: "DTF",
   PACKING: "Packing",
@@ -44,6 +57,20 @@ export function labelProductionStatus(status: string): string {
 export function labelAdminProduksiStatus(status: string): string {
   return (
     ADMIN_PRODUKSI_STATUS_LABELS[status] ??
+    status.replace(/_/g, " ").toLowerCase()
+  )
+}
+
+export function labelShipReleaseStatus(status: string): string {
+  return (
+    SHIP_RELEASE_STATUS_LABELS[status] ??
+    status.replace(/_/g, " ").toLowerCase()
+  )
+}
+
+export function labelDeliveryStatus(status: string): string {
+  return (
+    DELIVERY_STATUS_LABELS[status] ??
     status.replace(/_/g, " ").toLowerCase()
   )
 }

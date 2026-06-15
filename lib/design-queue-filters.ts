@@ -1,5 +1,6 @@
 import type { DesignQueueItemRecord } from "@/lib/cs-antrian-desain"
 import { isAccountingDpValidated } from "@/lib/cs-antrian-desain"
+import { queueIdentifierSearchText } from "@/lib/cs-queue-identifiers"
 
 export type DesignQueueFilterState = {
   search: string
@@ -25,7 +26,10 @@ export type DesignQueueFilterableItem = DesignQueueItemRecord & {
   FinalOrder?: {
     orderNumber?: string
     AccountingTransaction?: { paymentStatus: string } | null
-    ProductionPipeline?: { currentStatus: string } | null
+    ProductionPipeline?: {
+      currentStatus: string
+      adminProduksiStatus?: string
+    } | null
   } | null
 }
 
@@ -53,12 +57,15 @@ export function matchesDesignQueueSearch(
 
   return (
     item.namaKonsumen.toLowerCase().includes(q) ||
-    item.artikelId.toLowerCase().includes(q) ||
-    item.designId.toLowerCase().includes(q) ||
-    item.namaArtikel.toLowerCase().includes(q) ||
-    (item.sppGroupId?.toLowerCase().includes(q) ?? false) ||
-    item.csNama.toLowerCase().includes(q) ||
-    (item.FinalOrder?.orderNumber?.toLowerCase().includes(q) ?? false)
+    queueIdentifierSearchText({
+      orderNumber: item.FinalOrder?.orderNumber,
+      sppNumber: item.sppNumber,
+      artikelId: item.artikelId,
+      namaArtikel: item.namaArtikel,
+      designId: item.designId,
+      sppGroupId: item.sppGroupId,
+    }).includes(q) ||
+    item.csNama.toLowerCase().includes(q)
   )
 }
 
@@ -89,9 +96,11 @@ export function matchesDesignQueuePaymentStatus(
   }
 
   if (paymentStatus === "MENUNGGU_ADMIN_PRODUKSI") {
+    const pipeline = item.FinalOrder?.ProductionPipeline
     return (
-      item.statusDesain.trim().toUpperCase() === "DISETUJUI_CS" &&
-      isAccountingDpValidated(current)
+      isAccountingDpValidated(current) &&
+      pipeline?.currentStatus === "ADMIN_PRODUKSI" &&
+      pipeline?.adminProduksiStatus === "PENDING"
     )
   }
 

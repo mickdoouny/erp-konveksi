@@ -98,6 +98,8 @@ model DesignQueueItem {
   catatanFinishing     String?
   ongkosKirim          Int?
   perluDtf             Boolean                 @default(false)
+  perluKancing         Boolean                 @default(false)
+  perluProving         Boolean                 @default(false)
   catatanDtf           String?
   statusDtf            DtfStatus               @default(TIDAK_PERLU)
   fileDtfVendor        String?
@@ -209,6 +211,7 @@ model FinalOrder {
   expressPriority       Int?
   needsKancing          Boolean                @default(false)
   needsDTF              Boolean                @default(false)
+  needsProving          Boolean                @default(false)
   fileDesainFinal       String?
   mockupApprovedAt      DateTime?
   catatanProduksi       String?
@@ -234,8 +237,9 @@ model FinalOrder {
   Customer              Customer?              @relation(fields: [customerId], references: [id])
   DesignQueueItem       DesignQueueItem?       @relation(fields: [designQueueItemId], references: [id])
   FinalOrderRosterLine  FinalOrderRosterLine[]
-  ProductionPipeline    ProductionPipeline?
-  JahitPaymentRecord    JahitPaymentRecord[]
+  ProductionPipeline       ProductionPipeline?
+  JahitPaymentRecord       JahitPaymentRecord[]
+  ProductionReworkRequest  ProductionReworkRequest[]
 
   @@index([createdAt])
   @@index([jenisProduksi, expressPriority])
@@ -421,6 +425,7 @@ model ProductionPipeline {
   adminValidatedBy             String?
   needsKancing                 Boolean                        @default(false)
   needsDTF                     Boolean                        @default(false)
+  needsProving                 Boolean                        @default(false)
   kancingCompletedAt           DateTime?
   dtfCompletedAt               DateTime?
   currentOperatorId            String?
@@ -430,7 +435,14 @@ model ProductionPipeline {
   holdReason                   String?
   completedAt                  DateTime?
   beratBahan                   Float?
+  beratRib                     Float?
+  beratKerah                   Float?
+  catatanPotongBahan           String?
   konsumsiTinta                Float?
+  konsumsiTintaC               Float?
+  konsumsiTintaM               Float?
+  konsumsiTintaY               Float?
+  konsumsiTintaK               Float?
   panjangKertas                Float?
   createdAt                    DateTime                       @default(now())
   updatedAt                    DateTime
@@ -440,11 +452,22 @@ model ProductionPipeline {
   shipReleaseStatus            ShipReleaseStatus              @default(NONE)
   shipReleaseValidatedAt       DateTime?
   shipReleaseValidatedBy       String?
+  settingResultFiles           String?
+  settingSubmittedAt           DateTime?
+  settingSubmittedBy           String?
+  settingAccAt                 DateTime?
+  settingAccBy                 String?
+  settingAccNote               String?
+  settingRejectNote            String?
+  settingSentToConsumerAt      DateTime?
+  settingSentToConsumerBy      String?
+  settingSubmitCount           Int                            @default(0)
   ProductionOperatorAssignment ProductionOperatorAssignment[]
   FinalOrder                   FinalOrder                     @relation(fields: [finalOrderId], references: [id], onDelete: Cascade)
   ProductionStagePlan          ProductionStagePlan[]
   ProductionStatusHistory      ProductionStatusHistory[]
   JahitPaymentRecord           JahitPaymentRecord[]
+  ProductionReworkRequest      ProductionReworkRequest[]
 
   @@index([adminProduksiStatus])
   @@index([completedAt])
@@ -510,6 +533,36 @@ model ProductionStatusHistory {
   @@index([eventType, createdAt])
   @@index([productionPipelineId, createdAt])
   @@index([toStatus, createdAt])
+}
+
+/// Permintaan rework dari operator ke Admin Produksi (kekurangan / gagal produksi).
+model ProductionReworkRequest {
+  id                   String                @id
+  productionPipelineId String
+  finalOrderId         String
+  requestedFromStage   ProductionStatus
+  requestedByUserId    String?
+  requestedByName      String
+  requestType          ReworkRequestType?
+  reason               String
+  /// Kode bagian garment yang perlu di-print ulang, mis. ["TANGAN_KIRI","BADAN_DEPAN"]
+  affectedParts        Json                  @default("[]")
+  status               ReworkRequestStatus   @default(PENDING)
+  adminNote            String?
+  reworkTargetStage    ProductionStatus      @default(PRINTING)
+  approvedAt           DateTime?
+  approvedBy           String?
+  rejectedAt           DateTime?
+  rejectedBy           String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime
+  FinalOrder           FinalOrder            @relation(fields: [finalOrderId], references: [id], onDelete: Cascade)
+  ProductionPipeline   ProductionPipeline    @relation(fields: [productionPipelineId], references: [id], onDelete: Cascade)
+
+  @@index([finalOrderId])
+  @@index([productionPipelineId, status])
+  @@index([requestedFromStage, status])
+  @@index([status, createdAt])
 }
 
 /// Rekam selesai jahit untuk pengajuan pembayaran (closing Sabtu).
@@ -641,15 +694,32 @@ enum ProductionEventType {
   ADMIN_REJECTED
   STAGE_ADVANCED
   STAGE_ROLLBACK
+  REWORK_REQUESTED
+  REWORK_APPROVED
+  REWORK_REJECTED
   HOLD_STARTED
   HOLD_ENDED
   OPERATOR_ASSIGNED
   OPERATOR_UNASSIGNED
 }
 
+enum ReworkRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum ReworkRequestType {
+  KEKURANGAN
+  GAGAL_PRODUKSI
+  LAINNYA
+}
+
 enum ProductionStatus {
   ADMIN_PRODUKSI
   SETTING
+  MENUNGGU_ACC_SETTING
   LAYOUT_PRINT
   PRINTING
   PREPARE_BAHAN_KAIN
@@ -703,4 +773,55 @@ enum OperatorDepartment {
   PRESS
   JAHIT
   FINISHING
+}
+
+/// Master stok bahan baku produksi — dikelola Admin Produksi.
+model InventoryItem {
+  id                String                @id
+  sku               String                @unique
+  name              String
+  category          InventoryItemCategory
+  unit              String
+  quantity          Float                 @default(0)
+  minQuantity       Float?
+  isActive          Boolean               @default(true)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime
+  InventoryMovement InventoryMovement[]
+
+  @@index([category, isActive])
+}
+
+/// Riwayat masuk/keluar/adjust stok — OUT dari pipeline punya unique per tahap+item.
+model InventoryMovement {
+  id                   String                @id
+  inventoryItemId      String
+  type                 InventoryMovementType
+  quantity             Float
+  quantityBefore       Float
+  quantityAfter        Float
+  productionPipelineId String?
+  productionStage      ProductionStatus?
+  orderNumber          String?
+  note                 String?
+  recordedByName       String
+  createdAt            DateTime              @default(now())
+  InventoryItem        InventoryItem         @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@unique([productionPipelineId, productionStage, inventoryItemId])
+  @@index([inventoryItemId, createdAt])
+  @@index([productionPipelineId])
+}
+
+enum InventoryItemCategory {
+  TINTA
+  KAIN
+  AKSESORIS
+  LAINNYA
+}
+
+enum InventoryMovementType {
+  IN
+  OUT
+  ADJUSTMENT
 }

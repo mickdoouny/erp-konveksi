@@ -5,9 +5,16 @@ import {
   csProduksiProgressBadgeClass,
   type CsAntrianProduksiFinalOrder,
 } from "@/lib/cs-antrian-produksi"
-import { labelPaymentStatus } from "@/lib/status-labels"
+import { resolveProductionUpdatedAt } from "@/lib/production-status-display"
+import {
+  labelDeliveryStatus,
+  labelPaymentStatus,
+  labelProductionStatus,
+  labelShipReleaseStatus,
+} from "@/lib/status-labels"
 import type { DesignQueueItemRecord } from "@/lib/cs-antrian-desain"
 import { JenisProduksiBadge } from "@/components/production/jenis-produksi-badge"
+import { QueueIdentifierBadges } from "@/components/cs/queue-identifier-badges"
 
 type AntrianProduksiStatusCardProps = {
   item: DesignQueueItemRecord & {
@@ -23,6 +30,11 @@ export function AntrianProduksiStatusCard({ item }: AntrianProduksiStatusCardPro
   const jenisProduksi = item.FinalOrder?.jenisProduksi ?? item.jenisProduksi
   const expressPriority =
     item.FinalOrder?.expressPriority ?? item.expressPriority
+  const deliveryStatus = item.FinalOrder?.deliveryStatus
+  const lastUpdated = resolveProductionUpdatedAt(
+    item.updatedAt,
+    pipeline?.updatedAt
+  )
 
   return (
     <div className="neo-card p-5 md:p-6">
@@ -48,18 +60,14 @@ export function AntrianProduksiStatusCard({ item }: AntrianProduksiStatusCardPro
             />
           </div>
         </div>
-        <div className="text-right text-xs text-zinc-500">
-          {item.FinalOrder?.orderNumber ? (
-            <p className="font-mono text-orange-400/90">
-              {item.FinalOrder.orderNumber}
-            </p>
-          ) : null}
-          <p className="mt-0.5">{item.designId}</p>
-          <p>{item.artikelId}</p>
-          {item.sppGroupId ? (
-            <p className="mt-1 font-mono text-zinc-400">Grup: {item.sppGroupId}</p>
-          ) : null}
-        </div>
+        <QueueIdentifierBadges
+          orderNumber={item.FinalOrder?.orderNumber}
+          sppNumber={item.sppNumber}
+          artikelId={item.artikelId}
+          namaArtikel={item.namaArtikel}
+          designId={item.designId}
+          variant="card"
+        />
       </div>
 
       <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 md:grid-cols-4">
@@ -78,9 +86,34 @@ export function AntrianProduksiStatusCard({ item }: AntrianProduksiStatusCardPro
           </dd>
           {pipeline?.currentStatus ? (
             <dd className="mt-0.5 text-xs text-zinc-500">
-              {progress.primary}
+              Tahap: {labelProductionStatus(pipeline.currentStatus)}
             </dd>
           ) : null}
+          {deliveryStatus ? (
+            <dd className="mt-0.5 text-xs text-zinc-500">
+              Pengiriman: {labelDeliveryStatus(deliveryStatus)}
+            </dd>
+          ) : null}
+          {pipeline?.shipReleaseStatus &&
+          pipeline.shipReleaseStatus !== "NONE" ? (
+            <dd className="mt-0.5 text-xs text-zinc-500">
+              Izin kirim: {labelShipReleaseStatus(pipeline.shipReleaseStatus)}
+            </dd>
+          ) : null}
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Terakhir diperbarui</dt>
+          <dd className="mt-1 font-medium text-zinc-300">
+            {lastUpdated
+              ? lastUpdated.toLocaleString("id-ID", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "—"}
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-zinc-500">Konsumen</dt>

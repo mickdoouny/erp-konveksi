@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "ProductionPipeline" ADD COLUMN "konsumsiTintaC" DOUBLE PRECISION,
+ADD COLUMN "konsumsiTintaM" DOUBLE PRECISION,
+ADD COLUMN "konsumsiTintaY" DOUBLE PRECISION,
+ADD COLUMN "konsumsiTintaK" DOUBLE PRECISION;
