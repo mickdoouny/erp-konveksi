@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
+import { AuthGateShell } from "@/components/auth-gate"
 import { AppShell, AppShellLoading } from "@/components/layout/app-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { DesignQueueListFilters } from "@/components/design-queue/list-filters"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
 import { statusBadgeClass, statusLabel } from "@/lib/cs-antrian-desain"
 import type { DesignQueueItemRecord } from "@/lib/cs-antrian-desain"
-import { DESIGNER_APPROVED_STATUSES } from "@/lib/designer-antrian"
+import { DESIGNER_ACTIVE_STATUSES } from "@/lib/designer-antrian"
 import {
   EMPTY_DESIGN_QUEUE_FILTERS,
   filterDesignQueueItems,
@@ -16,18 +17,24 @@ import {
   type DesignQueueFilterState,
 } from "@/lib/design-queue-filters"
 
-const APPROVED_STATUS_OPTIONS = [
+const DESIGNER_STATUS_OPTIONS = [
   { value: "", label: "Semua status" },
-  ...DESIGNER_APPROVED_STATUSES.map((status) => ({
+  ...DESIGNER_ACTIVE_STATUSES.map((status) => ({
     value: status,
     label: statusLabel(status),
   })),
 ]
 
-export default function DesainerAntrianDisetujuiPage() {
+type DesainerAntrianClientProps = {
+  initialItems: DesignQueueItemRecord[]
+}
+
+export default function DesainerAntrianClient({
+  initialItems,
+}: DesainerAntrianClientProps) {
   const auth = useAuthGuard({ roles: ["desainer", "owner"] })
-  const [items, setItems] = useState<DesignQueueItemRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const [items, setItems] = useState<DesignQueueItemRecord[]>(initialItems)
+  const [loading, setLoading] = useState(false)
   const [filters, setFilters] = useState<DesignQueueFilterState>(
     EMPTY_DESIGN_QUEUE_FILTERS
   )
@@ -35,7 +42,7 @@ export default function DesainerAntrianDisetujuiPage() {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch("/api/design-queue?queue=disetujui", {
+      const res = await fetch("/api/design-queue?queue=aktif", {
         cache: "no-store",
       })
       const data = await res.json()
@@ -48,9 +55,8 @@ export default function DesainerAntrianDisetujuiPage() {
   }
 
   useEffect(() => {
-    if (auth.status !== "authenticated") return
-    load()
-  }, [auth.status])
+    setItems(initialItems)
+  }, [initialItems])
 
   const filtered = useMemo(
     () => filterDesignQueueItems(items, filters),
@@ -58,12 +64,8 @@ export default function DesainerAntrianDisetujuiPage() {
   )
   const filtersActive = hasActiveDesignQueueFilters(filters)
 
-  if (auth.status === "loading") {
-    return (
-      <AppShell>
-        <AppShellLoading />
-      </AppShell>
-    )
+  if (auth.status === "unauthenticated" || auth.status === "forbidden") {
+    return <AuthGateShell message="Mengalihkan ke login…" />
   }
 
   return (
@@ -71,9 +73,9 @@ export default function DesainerAntrianDisetujuiPage() {
       <div className="min-w-0 w-full">
       <PageHeader
         badge="Desainer"
-        title="Antrian pasca-ACC"
-        titleAccent="konsumen"
-        description="Unggah CDR produksi (nama file = ID artikel.cdr) sebelum CS input order."
+        title="Antrian"
+        titleAccent="kerja"
+        description="Desain menunggu proses atau revisi — unggah hasil lalu kirim ke CS."
       />
 
       <div className="neo-card w-full min-w-0 p-4 sm:p-5 md:p-6">
@@ -81,9 +83,8 @@ export default function DesainerAntrianDisetujuiPage() {
           filters={filters}
           onChange={setFilters}
           onRefresh={load}
-          searchPlaceholder="Cari konsumen, artikel, ART…"
-          statusOptions={APPROVED_STATUS_OPTIONS}
-          showCdrFilter
+          searchPlaceholder="Cari konsumen, artikel, DSN, ART…"
+          statusOptions={DESIGNER_STATUS_OPTIONS}
         />
 
         {loading ? (
@@ -92,7 +93,7 @@ export default function DesainerAntrianDisetujuiPage() {
           <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center text-zinc-500">
             {filtersActive
               ? "Tidak ada antrian yang cocok dengan filter."
-              : "Belum ada antrian pasca-ACC konsumen."}
+              : "Antrian kosong."}
           </div>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-zinc-800">
@@ -102,20 +103,23 @@ export default function DesainerAntrianDisetujuiPage() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-zinc-800 bg-zinc-950/80 text-left text-zinc-500">
-                  <th className="p-3">ART</th>
+                  <th className="p-3">DSN / ART</th>
                   <th className="p-3">Konsumen</th>
+                  <th className="p-3">Artikel</th>
                   <th className="p-3">Status</th>
-                  <th className="p-3">CDR</th>
                   <th className="p-3 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => (
                   <tr key={row.id} className="border-b border-zinc-900/80">
-                    <td className="p-3 font-mono text-orange-300">
+                    <td className="p-3 font-mono text-xs text-orange-300">
+                      {row.designId}
+                      <br />
                       {row.artikelId}
                     </td>
-                    <td className="p-3">{row.namaKonsumen}</td>
+                    <td className="p-3 text-zinc-200">{row.namaKonsumen}</td>
+                    <td className="p-3 text-zinc-300">{row.namaArtikel}</td>
                     <td className="p-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(row.statusDesain)}`}
@@ -123,19 +127,12 @@ export default function DesainerAntrianDisetujuiPage() {
                         {statusLabel(row.statusDesain)}
                       </span>
                     </td>
-                    <td className="p-3 text-zinc-400">
-                      {row.fileDesainProduksi ? "Sudah" : "Belum"}
-                    </td>
                     <td className="p-3 text-center">
                       <Link
-                        href={`/desainer/antrian-disetujui/${row.id}`}
-                        className={
-                          row.fileDesainProduksi
-                            ? "text-zinc-300 hover:text-orange-300"
-                            : "text-orange-400 hover:text-orange-300"
-                        }
+                        href={`/desainer/antrian/${row.id}`}
+                        className="text-orange-400 hover:text-orange-300"
                       >
-                        {row.fileDesainProduksi ? "Detail" : "Unggah CDR"}
+                        Buka
                       </Link>
                     </td>
                   </tr>

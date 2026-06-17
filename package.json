@@ -7,6 +7,10 @@
     "dev:lan": "node scripts/dev-lan.mjs",
     "build": "next build",
     "start": "next start",
+    "start:lan": "node scripts/start-lan.mjs",
+    "restart:lan": "powershell -ExecutionPolicy Bypass -File scripts/restart-lan.ps1",
+    "verify:lan": "node scripts/verify-lan-parity.mjs",
+    "diagnose:lan": "node scripts/diagnose-lan-assets.mjs",
     "lint": "eslint",
     "test": "node --import tsx --test lib/*.test.ts",
     "postinstall": "prisma generate"

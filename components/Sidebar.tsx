@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import NotificationBell from "@/components/notifications/notification-bell"
 import { NotificationProvider } from "@/components/notifications/notification-provider"
+import { useServerSessionUser } from "@/components/client-session-provider"
 import { readStoredUser } from "@/lib/auth"
 import { clearClientSession } from "@/lib/login-session"
 import { roleLabel } from "@/lib/roles"
@@ -29,6 +30,7 @@ const labelClass = "pt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-z
 
 function activeModuleLabel(pathname: string): string | null {
   if (pathname.startsWith("/owner/operator")) return "Operator"
+  if (pathname.startsWith("/owner")) return "Dashboard Owner"
   if (pathname.startsWith("/operator")) return "Operator"
   if (pathname.startsWith("/admin/keuangan")) return "Admin Keuangan"
   if (
@@ -63,26 +65,36 @@ function activeModuleLabel(pathname: string): string | null {
   return null
 }
 
+function sessionUserToSidebarUser(
+  stored: {
+    nama?: string
+    role: string
+    divisi?: string
+    operatorDepartment?: string
+  } | null
+): User | null {
+  if (!stored) return null
+  return {
+    nama: stored.nama,
+    role: stored.role,
+    divisi: stored.divisi,
+    operatorDepartment: stored.operatorDepartment,
+  }
+}
+
 export default function Sidebar() {
   const router = useRouter()
   const pathname = usePathname()
-  const [user, setUser] = useState<User | null>(null)
+  const serverUser = useServerSessionUser()
+  const [user, setUser] = useState<User | null>(() =>
+    sessionUserToSidebarUser(serverUser)
+  )
 
   useEffect(() => {
     queueMicrotask(() => {
-      const stored = readStoredUser()
-      setUser(
-        stored
-          ? {
-              nama: stored.nama,
-              role: stored.role,
-              divisi: stored.divisi,
-              operatorDepartment: stored.operatorDepartment,
-            }
-          : null
-      )
+      setUser(sessionUserToSidebarUser(readStoredUser() ?? serverUser))
     })
-  }, [])
+  }, [serverUser])
 
   function logout() {
     clearClientSession()
@@ -99,15 +111,18 @@ export default function Sidebar() {
 
   const notifyRoles = ["cs", "desainer", "admin_keuangan", "admin_produksi", "owner"]
 
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
   return (
     <NotificationProvider role={role && notifyRoles.includes(role) ? role : null}>
-      <div className="flex w-72 shrink-0 flex-col border-r border-zinc-800/90 bg-zinc-950 bg-[linear-gradient(180deg,#030304_0%,#050508_50%,#0a0a0c_100%)] text-white">
-        <div className="border-b border-zinc-800/80 p-6">
+      <aside className="neo-sidebar flex w-full shrink-0 flex-col border-b border-zinc-800/90 bg-zinc-950 bg-[linear-gradient(180deg,#030304_0%,#050508_50%,#0a0a0c_100%)] text-white md:h-screen md:min-h-[100vh] md:w-[290px] md:min-w-[290px] md:max-w-[290px] md:border-b-0 md:border-r">
+        <div className="flex min-h-0 flex-1 flex-col md:h-full">
+        <div className="shrink-0 border-b border-zinc-800/80 p-4 md:p-6">
           <div className="mb-2 h-px w-12 bg-gradient-to-r from-orange-500 to-transparent" />
 
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-bold tracking-tight text-white">
+            <div className="min-w-[12rem] flex-1">
+              <h1 className="text-lg font-bold leading-snug tracking-tight text-white sm:text-xl">
                 Dasa Putra Kreatif
               </h1>
 
@@ -115,9 +130,20 @@ export default function Sidebar() {
                 ERP · Konveksi
               </p>
             </div>
-            {role && notifyRoles.includes(role) ? (
-              <NotificationBell />
-            ) : null}
+            <div className="flex shrink-0 items-center gap-2">
+              {role && notifyRoles.includes(role) ? (
+                <NotificationBell />
+              ) : null}
+              <button
+                type="button"
+                aria-expanded={mobileNavOpen}
+                aria-controls="sidebar-nav"
+                onClick={() => setMobileNavOpen((open) => !open)}
+                className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-orange-500/40 hover:text-orange-300 md:hidden"
+              >
+                {mobileNavOpen ? "Tutup" : "Menu"}
+              </button>
+            </div>
           </div>
 
           {user?.nama ? (
@@ -136,7 +162,13 @@ export default function Sidebar() {
           ) : null}
         </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
+      <div
+        id="sidebar-nav"
+        data-nav-open={mobileNavOpen ? "true" : "false"}
+        className={`sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto p-3 ${
+          mobileNavOpen ? "" : "max-md:hidden"
+        }`}
+      >
         <nav>
           <ul className="space-y-1">
             {role === "owner" && (
@@ -337,7 +369,7 @@ export default function Sidebar() {
         </nav>
       </div>
 
-        <div className="border-t border-zinc-800/80 p-4">
+        <div className="mt-auto shrink-0 border-t border-zinc-800/80 p-4">
           <button
             type="button"
             onClick={logout}
@@ -346,7 +378,8 @@ export default function Sidebar() {
             Keluar
           </button>
         </div>
-      </div>
+        </div>
+      </aside>
     </NotificationProvider>
   )
 }

@@ -75,6 +75,10 @@ model DesignQueueItem {
   hasilDesain          String?
   accSubmittedAt       DateTime?
   alamatPengiriman     String?
+  provinsi             String?
+  kotaKabupaten        String?
+  kecamatan            String?
+  kodePos              String?
   dpAmount             Int?
   jenisBahan           String?
   jenisKerah           String?

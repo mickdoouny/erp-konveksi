@@ -109,24 +109,50 @@ export function syncSessionCookieToLocalStorage(): boolean {
     return true
   }
 
-  return storedUser !== null
+  if (storedUser) {
+    try {
+      window.localStorage.removeItem("user")
+    } catch {
+      /* private mode */
+    }
+  }
+
+  return false
 }
 
-/** Cookie-first session read (works when localStorage is blocked). */
+/** Cookie + SSR session — use after login redirect before document.cookie is readable. */
+export function resolveSessionUser(
+  serverUser: AuthUser | null | undefined
+): AuthUser | null {
+  syncSessionCookieToLocalStorage()
+  return serverUser ?? readClientSessionUser()
+}
+
+/** Cookie-first session read — localStorage alone is never trusted without cookie. */
 export function readClientSessionUser(): AuthUser | null {
   if (typeof window === "undefined") {
     return null
   }
 
-  syncSessionCookieToLocalStorage()
+  const raw = readUserCookieValue()
+  const cookieUser = raw ? parsePendingUser(raw) : null
 
-  const stored = readUserFromLocalStorage()
-  if (stored) {
-    return stored
+  if (cookieUser) {
+    try {
+      window.localStorage.setItem("user", JSON.stringify(cookieUser))
+    } catch {
+      /* private mode — cookie still authoritative */
+    }
+    return cookieUser
   }
 
-  const raw = readUserCookieValue()
-  return raw ? parsePendingUser(raw) : null
+  try {
+    window.localStorage.removeItem("user")
+  } catch {
+    /* private mode */
+  }
+
+  return null
 }
 
 /** Clear cookie mirror + server session (Sidebar / report logout). */

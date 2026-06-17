@@ -1,3 +1,4 @@
+import type { OperatorDepartment } from "@prisma/client"
 import { randomUUID } from "crypto"
 import { NextResponse } from "next/server"
 import { isOperatorDepartment } from "@/lib/operators"
@@ -28,7 +29,9 @@ export async function GET(request: Request) {
 
     const operators = await prisma.operator.findMany({
       where: {
-        ...(department ? { department } : {}),
+        ...(department
+          ? { department: department as OperatorDepartment }
+          : {}),
         ...(activeOnly ? { isActive: true } : {}),
       },
       select: OPERATOR_PUBLIC_SELECT,

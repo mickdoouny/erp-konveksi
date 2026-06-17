@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import { AuthGateShell } from "@/components/auth-gate"
 import { AppShell, AppShellLoading } from "@/components/layout/app-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { BtnPrimary } from "@/components/ui/buttons"
@@ -61,7 +62,10 @@ export default function OwnerOperatorPage() {
   }
 
   useEffect(() => {
-    if (auth.status !== "authenticated") return
+    if (auth.status !== "authenticated") {
+      setLoading(false)
+      return
+    }
     queueMicrotask(() => {
       void load(activeTab)
     })
@@ -133,8 +137,17 @@ export default function OwnerOperatorPage() {
     }
   }
 
+  if (auth.status === "loading") {
+    return <AuthGateShell />
+  }
+
+  if (auth.status === "unauthenticated" || auth.status === "forbidden") {
+    return <AuthGateShell message="Mengalihkan ke login…" />
+  }
+
   return (
     <AppShell>
+      <div className="min-w-0 w-full">
       <PageHeader
         badge="Master Data"
         title="Daftar"
@@ -262,6 +275,7 @@ export default function OwnerOperatorPage() {
           </Link>
         </div>
       )}
+      </div>
     </AppShell>
   )
 }

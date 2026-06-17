@@ -10,6 +10,10 @@ export type KonsumenPhoneMatch = {
   namaKonsumen: string
   noTelepon: string
   alamatPengiriman: string | null
+  provinsi: string | null
+  kotaKabupaten: string | null
+  kecamatan: string | null
+  kodePos: string | null
   lastOrderAt: Date
 }
 
@@ -37,6 +41,10 @@ export type KonsumenLookupResult = {
   found: boolean
   nama: string | null
   alamat: string | null
+  provinsi: string | null
+  kotaKabupaten: string | null
+  kecamatan: string | null
+  kodePos: string | null
   noTelepon: string | null
   history: KonsumenHistoryItem[]
 }
@@ -108,6 +116,10 @@ export async function lookupKonsumenByPhone(
       found: false,
       nama: null,
       alamat: null,
+      provinsi: null,
+      kotaKabupaten: null,
+      kecamatan: null,
+      kodePos: null,
       noTelepon: null,
       history: [],
     }
@@ -122,6 +134,10 @@ export async function lookupKonsumenByPhone(
       namaArtikel: true,
       namaKonsumen: true,
       alamatPengiriman: true,
+      provinsi: true,
+      kotaKabupaten: true,
+      kecamatan: true,
+      kodePos: true,
       noTelepon: true,
       jenisOrder: true,
       jenisProduksi: true,
@@ -144,6 +160,10 @@ export async function lookupKonsumenByPhone(
       found: false,
       nama: null,
       alamat: null,
+      provinsi: null,
+      kotaKabupaten: null,
+      kecamatan: null,
+      kodePos: null,
       noTelepon: null,
       history: [],
     }
@@ -155,6 +175,10 @@ export async function lookupKonsumenByPhone(
     found: true,
     nama: latest.namaKonsumen,
     alamat: latest.alamatPengiriman ?? "",
+    provinsi: latest.provinsi ?? "",
+    kotaKabupaten: latest.kotaKabupaten ?? "",
+    kecamatan: latest.kecamatan ?? "",
+    kodePos: latest.kodePos ?? "",
     noTelepon: latest.noTelepon ?? rawPhone.trim(),
     history: rows.map(mapHistoryRow),
   }
@@ -171,6 +195,10 @@ export async function findKonsumenByNormalizedPhone(
     namaKonsumen: lookup.nama,
     noTelepon: lookup.noTelepon ?? rawPhone.trim(),
     alamatPengiriman: lookup.alamat,
+    provinsi: lookup.provinsi,
+    kotaKabupaten: lookup.kotaKabupaten,
+    kecamatan: lookup.kecamatan,
+    kodePos: lookup.kodePos,
     lastOrderAt: history ? new Date(history.createdAt) : new Date(),
   }
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -13,7 +14,7 @@ export async function GET() {
         createdAt: "desc",
       },
       include: {
-        messages: {
+        LeadMessage: {
           orderBy: {
             createdAt: "asc",
           },
@@ -66,6 +67,8 @@ export async function POST(request: Request) {
     const lead =
       await prisma.leadOrder.create({
         data: {
+          id: randomUUID(),
+          updatedAt: new Date(),
           leadCode,
 
           namaCs,
@@ -133,8 +136,9 @@ export async function POST(request: Request) {
               ? "DP INPUT"
               : "BELUM DP",
 
-          messages: {
+          LeadMessage: {
             create: {
+              id: randomUUID(),
               senderRole: "CS",
 
               senderName: namaCs,
@@ -151,7 +155,7 @@ export async function POST(request: Request) {
         },
 
         include: {
-          messages: true,
+          LeadMessage: true,
         },
       });
 

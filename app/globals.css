@@ -28,8 +28,9 @@ body {
 .neo-main {
   flex: 1 1 0%;
   width: 100%;
+  min-width: 0;
   min-height: 100vh;
-  padding: 1.5rem;
+  padding: 1rem;
   color: #fafafa;
   background-color: #030304;
   background-image: radial-gradient(
@@ -40,9 +41,39 @@ body {
     linear-gradient(180deg, #050505 0%, #030304 45%, #0a0808 100%);
 }
 
+@media (min-width: 640px) {
+  .neo-main {
+    padding: 1.25rem;
+  }
+}
+
 @media (min-width: 768px) {
   .neo-main {
+    padding: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .neo-main {
     padding: 2rem;
+  }
+}
+
+/* Sidebar shell — lebar tetap di desktop, stack di mobile */
+.neo-sidebar {
+  flex-shrink: 0;
+}
+
+/* Nav selalu tampil di desktop; collapsible hanya di mobile (lihat max-md:hidden di Sidebar) */
+#sidebar-nav {
+  display: block;
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+@media (min-width: 768px) {
+  #sidebar-nav {
+    display: block !important;
   }
 }
 

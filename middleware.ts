@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { parsePendingUser, USER_SESSION_COOKIE } from "@/lib/login-session"
+import {
+  parsePendingUser,
+  USER_SESSION_COOKIE,
+  userSessionCookieOptions,
+} from "@/lib/login-session"
 import { relativeRedirectPath } from "@/lib/request-origin"
 
 const PUBLIC_PREFIXES = [
@@ -11,9 +15,6 @@ const PUBLIC_PREFIXES = [
 ]
 
 function isPublicPath(pathname: string): boolean {
-  if (pathname === "/") {
-    return true
-  }
   return PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(prefix)
   )
@@ -31,19 +32,37 @@ function redirectOnRequest(
   search?: Record<string, string>
 ) {
   const target = new URL(relativeRedirectPath(pathname, search), request.url)
-  return NextResponse.redirect(target)
+  return htmlResponse(NextResponse.redirect(target))
+}
+
+/** LAN operators often cache HTML after dev→prod switch; stale chunk URLs break CSS/JS. */
+function htmlResponse(response: NextResponse) {
+  response.headers.set("Cache-Control", "no-store, must-revalidate")
+  return response
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const user = sessionUser(request)
 
+  if (pathname === "/") {
+    return redirectOnRequest(request, "/login")
+  }
+
   if (pathname.startsWith("/login/session-bridge")) {
     return redirectOnRequest(request, "/login")
   }
 
   if (pathname.startsWith("/login")) {
-    return NextResponse.next()
+    if (request.nextUrl.searchParams.get("logout") === "1") {
+      const response = redirectOnRequest(request, "/login", { error: "logout" })
+      response.cookies.set(USER_SESSION_COOKIE, "", {
+        ...userSessionCookieOptions(0),
+        maxAge: 0,
+      })
+      return response
+    }
+    return htmlResponse(NextResponse.next())
   }
 
   if (isPublicPath(pathname)) {
@@ -54,7 +73,7 @@ export function middleware(request: NextRequest) {
     return redirectOnRequest(request, "/login", { error: "session" })
   }
 
-  return NextResponse.next()
+  return htmlResponse(NextResponse.next())
 }
 
 export const config = {

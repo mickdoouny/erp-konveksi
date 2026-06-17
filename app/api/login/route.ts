@@ -105,16 +105,14 @@ export async function POST(request: Request) {
   const formSubmission = isFormSubmission(request)
   const formData = formSubmission ? await request.formData() : null
   const rawCredentials = formData
-    ? {
-        username:
-          typeof formData.get("username") === "string"
-            ? formData.get("username")
-            : "",
-        password:
-          typeof formData.get("password") === "string"
-            ? formData.get("password")
-            : "",
-      }
+    ? (() => {
+        const username = formData.get("username")
+        const password = formData.get("password")
+        return {
+          username: typeof username === "string" ? username : "",
+          password: typeof password === "string" ? password : "",
+        }
+      })()
     : await readCredentials(request)
 
   const credentials = rawCredentials

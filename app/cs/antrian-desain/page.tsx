@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import { AuthGate } from "@/components/auth-gate"
 import CsShell from "@/components/layout/cs-shell"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
 import { withCsApiScope } from "@/lib/cs-api-scope"
@@ -60,10 +61,6 @@ export default function CsAntrianDesainPage() {
     )
   }
 
-  if (auth.status !== "authenticated") {
-    return null
-  }
-
   const filtered = items.filter((item) => {
     if (!filter.trim()) return true
     const q = filter.toLowerCase()
@@ -74,15 +71,16 @@ export default function CsAntrianDesainPage() {
   })
 
   return (
-    <CsShell
-      title="Antrian desain"
-      description="Kelola permintaan desain dari konsumen — kirim ke desainer, ACC, dan revisi."
-      actions={
-        <Link href="/cs/antrian-desain/tambah" className="neo-btn-primary text-sm">
-          + Tambah desain
-        </Link>
-      }
-    >
+    <AuthGate auth={auth}>
+      <CsShell
+        title="Antrian desain"
+        description="Kelola permintaan desain dari konsumen — kirim ke desainer, ACC, dan revisi."
+        actions={
+          <Link href="/cs/antrian-desain/tambah" className="neo-btn-primary text-sm">
+            + Tambah desain
+          </Link>
+        }
+      >
       <div className="neo-card p-5 md:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <input
@@ -205,5 +203,6 @@ export default function CsAntrianDesainPage() {
         )}
       </div>
     </CsShell>
+    </AuthGate>
   )
 }

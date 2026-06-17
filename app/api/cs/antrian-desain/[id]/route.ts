@@ -20,7 +20,9 @@ import {
   parseJenisProduksi,
   resolveExpressPriorityFields,
   resolveLockedKonsumenFields,
+  sanitizeRosterLines,
   validateCsInputOrderForSubmit,
+  type CsRosterLineInput,
 } from "@/lib/cs-input-order"
 import { validateExcelRosterForSubmit } from "@/lib/excel-roster-parse"
 import { createFinalOrderFromDesignQueue } from "@/lib/create-final-order-from-design-queue"
@@ -161,6 +163,10 @@ export async function PATCH(
           noTelepon: parsed.data.noTelepon,
           noTeleponNormalized: parsed.data.noTeleponNormalized,
           alamatPengiriman: parsed.data.alamatPengiriman,
+          provinsi: parsed.data.provinsi,
+          kotaKabupaten: parsed.data.kotaKabupaten,
+          kecamatan: parsed.data.kecamatan,
+          kodePos: parsed.data.kodePos,
           updatedAt: new Date(),
         },
       })
@@ -196,13 +202,31 @@ export async function PATCH(
       }
 
       const input = parseCsInputOrderBody(body)
-      const inputCheck = validateCsInputOrderForSubmit(input)
+      const rawRosterLines = Array.isArray(body.rosterLines)
+        ? (body.rosterLines as CsRosterLineInput[])
+        : []
+      const totals = calculateOrderTotalFromInput({
+        ...input,
+        rosterLines: sanitizeRosterLines(rawRosterLines),
+      })
+      const inputCheck = validateCsInputOrderForSubmit({
+        ...input,
+        rosterLines: rawRosterLines,
+        subtotal: totals.subtotal,
+        totalHarga: totals.totalHarga,
+      })
       if (!inputCheck.ok) {
-        return NextResponse.json({ message: inputCheck.message }, { status: 400 })
+        return NextResponse.json(
+          {
+            message: inputCheck.message,
+            errors: inputCheck.errors,
+          },
+          { status: 400 }
+        )
       }
 
       const rosterCheck = validateExcelRosterForSubmit(
-        input.rosterLines ?? [],
+        sanitizeRosterLines(rawRosterLines),
         input.totalOrder
       )
       if (!rosterCheck.ok) {
@@ -212,8 +236,7 @@ export async function PATCH(
         )
       }
 
-      const { totalHarga: computedTotal, qty: computedQty } =
-        calculateOrderTotalFromInput(input)
+      const { totalHarga: computedTotal, qty: computedQty } = totals
       if (computedQty <= 0 || computedTotal <= 0) {
         return NextResponse.json(
           { message: "Lengkapi harga per jenis dan daftar item roster." },

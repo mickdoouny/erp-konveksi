@@ -4,6 +4,10 @@ import {
   isValidIndonesianPhone,
   normalizeIndonesianPhone,
 } from "@/lib/phone-normalize"
+import {
+  hasShippingAddressErrors,
+  validateShippingAddress,
+} from "@/lib/shipping-address"
 import { isDpValidatedPaymentStatus } from "@/lib/status-labels"
 
 export { isMenungguDp }
@@ -23,6 +27,10 @@ export type DesignQueueItemRecord = {
   namaKonsumen: string
   noTelepon?: string | null
   alamatPengiriman?: string | null
+  provinsi?: string | null
+  kotaKabupaten?: string | null
+  kecamatan?: string | null
+  kodePos?: string | null
   namaArtikel: string
   sppNumber?: string | null
   materiDesain?: string | null
@@ -160,7 +168,6 @@ export function generateSppGroupId(): string {
 
 export type CreateArtikelInput = {
   namaArtikel: string
-  spp?: string
   catatanDesain?: string
   perluDtf?: boolean
   perluKancing?: boolean
@@ -177,6 +184,10 @@ export type CreateDesignBatchInput = {
   namaKonsumen: string
   telepon: string
   alamat: string
+  provinsi?: string
+  kotaKabupaten?: string
+  kecamatan?: string
+  kodePos?: string
   artikels: CreateArtikelInput[]
 }
 
@@ -190,6 +201,10 @@ export type CsAntrianDesainValidated = {
   telepon: string
   noTeleponNormalized: string
   alamat: string
+  provinsi: string
+  kotaKabupaten: string
+  kecamatan: string
+  kodePos: string
   artikels: CreateArtikelInput[]
 }
 
@@ -203,6 +218,10 @@ export function validateCsAntrianDesainBody(
   const namaKonsumen = body.namaKonsumen?.trim() ?? ""
   const telepon = body.telepon?.trim() ?? ""
   const alamat = body.alamat?.trim() ?? ""
+  const provinsi = body.provinsi?.trim() ?? ""
+  const kotaKabupaten = body.kotaKabupaten?.trim() ?? ""
+  const kecamatan = body.kecamatan?.trim() ?? ""
+  const kodePos = body.kodePos?.trim() ?? ""
 
   if (!namaKonsumen) {
     errors.push({ field: "namaKonsumen", message: "Nama konsumen wajib diisi" })
@@ -214,8 +233,32 @@ export function validateCsAntrianDesainBody(
     errors.push({ field: "telepon", message: INVALID_PHONE_MESSAGE })
   }
 
-  if (!alamat) {
-    errors.push({ field: "alamat", message: "Alamat pengiriman wajib diisi" })
+  const addressErrors = validateShippingAddress({
+    alamat,
+    provinsi,
+    kotaKabupaten,
+    kecamatan,
+    kodePos,
+  })
+  if (hasShippingAddressErrors(addressErrors)) {
+    if (addressErrors.alamat) {
+      errors.push({ field: "alamat", message: addressErrors.alamat })
+    }
+    if (addressErrors.provinsi) {
+      errors.push({ field: "provinsi", message: addressErrors.provinsi })
+    }
+    if (addressErrors.kotaKabupaten) {
+      errors.push({
+        field: "kotaKabupaten",
+        message: addressErrors.kotaKabupaten,
+      })
+    }
+    if (addressErrors.kecamatan) {
+      errors.push({ field: "kecamatan", message: addressErrors.kecamatan })
+    }
+    if (addressErrors.kodePos) {
+      errors.push({ field: "kodePos", message: addressErrors.kodePos })
+    }
   }
 
   if (!Array.isArray(body.artikels) || body.artikels.length === 0) {
@@ -225,10 +268,40 @@ export function validateCsAntrianDesainBody(
     })
   } else {
     body.artikels.forEach((artikel, index) => {
+      const label = `Artikel ${index + 1}`
+
       if (!artikel.namaArtikel?.trim()) {
         errors.push({
           field: `artikels.${index}.namaArtikel`,
           message: `Nama artikel ${index + 1} wajib diisi`,
+        })
+      }
+
+      if (!artikel.catatanDesain?.trim()) {
+        errors.push({
+          field: `artikels.${index}.catatanDesain`,
+          message: `Catatan desain ${label} wajib diisi`,
+        })
+      }
+
+      if (artikel.perluDtf && !artikel.catatanDtf?.trim()) {
+        errors.push({
+          field: `artikels.${index}.catatanDtf`,
+          message: `Catatan DTF ${label} wajib diisi`,
+        })
+      }
+
+      if (!artikel.desainUtama?.length) {
+        errors.push({
+          field: `artikels.${index}.desainUtama`,
+          message: `Desain utama ${label} wajib diunggah`,
+        })
+      }
+
+      if (!artikel.logoSponsor?.length) {
+        errors.push({
+          field: `artikels.${index}.logoSponsor`,
+          message: `Logo sponsor ${label} wajib diunggah`,
         })
       }
     })
@@ -258,6 +331,10 @@ export function validateCsAntrianDesainBody(
       telepon,
       noTeleponNormalized,
       alamat,
+      provinsi,
+      kotaKabupaten,
+      kecamatan,
+      kodePos,
       artikels: body.artikels,
     },
   }
@@ -358,6 +435,10 @@ export type EditKonsumenPrefill = {
   namaKonsumen: string
   noTelepon?: string | null
   alamatPengiriman?: string | null
+  provinsi?: string | null
+  kotaKabupaten?: string | null
+  kecamatan?: string | null
+  kodePos?: string | null
   sppNumber?: string | null
 }
 
@@ -365,6 +446,10 @@ export type CsEditKonsumenInput = {
   namaKonsumen: string
   noTelepon: string
   alamatPengiriman: string
+  provinsi: string
+  kotaKabupaten: string
+  kecamatan: string
+  kodePos: string
 }
 
 export type CsEditKonsumenValidated = CsEditKonsumenInput & {
@@ -379,6 +464,10 @@ export function parseCsEditKonsumenBody(
   const namaKonsumen = String(body.namaKonsumen ?? "").trim()
   const noTelepon = String(body.noTelepon ?? "").trim()
   const alamatPengiriman = String(body.alamatPengiriman ?? "").trim()
+  const provinsi = String(body.provinsi ?? "").trim()
+  const kotaKabupaten = String(body.kotaKabupaten ?? "").trim()
+  const kecamatan = String(body.kecamatan ?? "").trim()
+  const kodePos = String(body.kodePos ?? "").trim()
 
   if (!namaKonsumen) {
     return { ok: false, message: "Nama konsumen wajib diisi" }
@@ -389,8 +478,23 @@ export function parseCsEditKonsumenBody(
   if (!isValidIndonesianPhone(noTelepon)) {
     return { ok: false, message: INVALID_PHONE_MESSAGE }
   }
-  if (!alamatPengiriman) {
-    return { ok: false, message: "Alamat pengiriman wajib diisi" }
+
+  const addressErrors = validateShippingAddress({
+    alamat: alamatPengiriman,
+    provinsi,
+    kotaKabupaten,
+    kecamatan,
+    kodePos,
+  })
+  if (hasShippingAddressErrors(addressErrors)) {
+    const firstMessage =
+      addressErrors.alamat ??
+      addressErrors.provinsi ??
+      addressErrors.kotaKabupaten ??
+      addressErrors.kecamatan ??
+      addressErrors.kodePos ??
+      "Alamat pengiriman wajib diisi"
+    return { ok: false, message: firstMessage }
   }
 
   const noTeleponNormalized = normalizeIndonesianPhone(noTelepon)
@@ -400,7 +504,16 @@ export function parseCsEditKonsumenBody(
 
   return {
     ok: true,
-    data: { namaKonsumen, noTelepon, alamatPengiriman, noTeleponNormalized },
+    data: {
+      namaKonsumen,
+      noTelepon,
+      alamatPengiriman,
+      provinsi,
+      kotaKabupaten,
+      kecamatan,
+      kodePos,
+      noTeleponNormalized,
+    },
   }
 }
 

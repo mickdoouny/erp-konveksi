@@ -139,6 +139,10 @@ export default function CsAntrianDesainDetailPage() {
     namaKonsumen: string
     noTelepon: string
     alamatPengiriman: string
+    provinsi: string
+    kotaKabupaten: string
+    kecamatan: string
+    kodePos: string
   }) {
     if (!editKonsumenItem || !sessionUser) {
       return { ok: false, message: "Data antrian tidak ditemukan" }
@@ -242,6 +246,10 @@ export default function CsAntrianDesainDetailPage() {
             namaKonsumen: item.namaKonsumen,
             noTelepon: item.noTelepon,
             alamatPengiriman: item.alamatPengiriman,
+            provinsi: item.provinsi,
+            kotaKabupaten: item.kotaKabupaten,
+            kecamatan: item.kecamatan,
+            kodePos: item.kodePos,
             sppNumber: item.sppNumber,
           })
         }

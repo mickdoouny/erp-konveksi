@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { LoginForm } from "@/app/login/login-form"
-import { homePathByRole } from "@/lib/auth"
+import { homePathForUser } from "@/lib/auth-redirect"
 import { parsePendingUser, USER_SESSION_COOKIE } from "@/lib/login-session"
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -33,17 +33,24 @@ type LoginPageProps = {
     username?: string
     debug?: string
     continue?: string
+    logout?: string
   }>
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams
   const cookieStore = await cookies()
+
+  if (params.logout === "1") {
+    cookieStore.delete(USER_SESSION_COOKIE)
+    redirect("/login?error=logout")
+  }
+
   const sessionRaw = cookieStore.get(USER_SESSION_COOKIE)?.value
   const existingUser = sessionRaw ? parsePendingUser(sessionRaw) : null
 
   if (existingUser && params.continue === "1") {
-    redirect(homePathByRole(existingUser.role))
+    redirect(homePathForUser(existingUser))
   }
 
   const errorMessage = loginErrorMessage(params.error)
@@ -55,7 +62,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       errorMessage={errorMessage}
       initialUsername={initialUsername}
       debug={debug}
-      existingUser={existingUser}
     />
   )
 }

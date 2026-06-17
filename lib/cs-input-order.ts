@@ -93,12 +93,162 @@ export function parseJenisProduksi(value: unknown): CsJenisProduksi {
 }
 
 export function validateCsInputOrderForSubmit(
-  input: CsInputOrderBody
-): { ok: boolean; message?: string } {
-  if (!input.tanggalDeadline?.trim()) {
-    return { ok: false, message: "Deadline wajib diisi." }
+  input: CsInputOrderBody & {
+    subtotal?: number
+    totalHarga?: number
   }
-  return { ok: true }
+): { ok: boolean; message?: string; errors?: CsInputOrderFieldErrors } {
+  const fieldErrors: CsInputOrderFieldErrors = {}
+  const rosterMessages: string[] = []
+
+  if (!input.jenisOrder?.trim()) {
+    fieldErrors.jenisOrder = "Jenis order wajib dipilih"
+  }
+
+  const qty = input.totalOrder ?? 0
+  if (!qty || qty <= 0) {
+    fieldErrors.jumlahPcs = "Jumlah PCS wajib diisi (minimal 1)"
+  }
+
+  const lines = input.rosterLines ?? []
+  const rosterComplete = validateRosterLinesComplete(lines)
+  if (!rosterComplete.ok) {
+    rosterMessages.push(...rosterComplete.errors)
+  } else if (qty > 0 && lines.length !== qty) {
+    rosterMessages.push(
+      `Jumlah baris roster (${lines.length}) harus sama dengan jumlah PCS (${qty}).`
+    )
+  }
+
+  const counts = countRosterByJenisItemFromLines(lines)
+  if (counts.Stelan > 0 && !(input.hargaStelan && input.hargaStelan > 0)) {
+    fieldErrors.hargaStelan = "Harga stelan wajib diisi untuk item Stelan"
+  }
+  if (counts.Atasan > 0 && !(input.hargaAtasan && input.hargaAtasan > 0)) {
+    fieldErrors.hargaAtasan = "Harga atasan wajib diisi untuk item Atasan"
+  }
+  if (counts.Bawahan > 0 && !(input.hargaBawahan && input.hargaBawahan > 0)) {
+    fieldErrors.hargaBawahan = "Harga bawahan wajib diisi untuk item Bawahan"
+  }
+
+  const subtotal =
+    input.subtotal ??
+    calculateOrderTotalFromInput(input).subtotal
+  if (subtotal <= 0) {
+    fieldErrors.hargaStelan =
+      fieldErrors.hargaStelan ?? "Lengkapi harga per jenis sesuai roster"
+  }
+
+  const dp = input.dpAmount
+  if (dp == null || Number.isNaN(dp) || dp < 0) {
+    fieldErrors.dpAmount = "DP wajib diisi"
+  }
+
+  if (!input.tanggalDeadline?.trim()) {
+    fieldErrors.tanggalDeadline = "Deadline wajib diisi"
+  }
+
+  if (!input.buktiDp?.trim()) {
+    fieldErrors.buktiDp = "Bukti DP wajib diunggah"
+  }
+
+  if (!input.catatanFinishing?.trim()) {
+    fieldErrors.catatanFinishing = "Catatan finishing wajib diisi"
+  }
+
+  if (rosterMessages.length > 0) {
+    fieldErrors.roster = rosterMessages
+  }
+
+  if (Object.keys(fieldErrors).length === 0) {
+    return { ok: true }
+  }
+
+  return {
+    ok: false,
+    message: "Lengkapi semua kolom wajib sebelum menyimpan",
+    errors: {
+      ...fieldErrors,
+      summary: "Lengkapi semua kolom wajib sebelum menyimpan",
+    },
+  }
+}
+
+export type CsInputOrderFieldErrors = {
+  summary?: string
+  jenisOrder?: string
+  jumlahPcs?: string
+  hargaStelan?: string
+  hargaAtasan?: string
+  hargaBawahan?: string
+  dpAmount?: string
+  tanggalDeadline?: string
+  buktiDp?: string
+  catatanFinishing?: string
+  roster?: string[]
+}
+
+export function hasCsInputOrderFieldErrors(
+  errors: CsInputOrderFieldErrors | null | undefined
+): errors is CsInputOrderFieldErrors {
+  return errors != null && Object.keys(errors).length > 0
+}
+
+export function validateRosterLinesComplete(
+  lines: CsRosterLineInput[]
+): { ok: boolean; errors: string[] } {
+  if (lines.length === 0) {
+    return {
+      ok: false,
+      errors: ["Daftar item kosong. Unggah Excel atau isi roster manual."],
+    }
+  }
+
+  const errors: string[] = []
+
+  lines.forEach((line, index) => {
+    const row = index + 1
+
+    if (!line.nama?.trim()) {
+      errors.push(`Baris ${row}: Nama wajib diisi.`)
+    }
+    if (!line.ukuran?.trim()) {
+      errors.push(`Baris ${row}: Ukuran wajib diisi.`)
+    }
+    if (!line.nomorPunggung?.trim()) {
+      errors.push(`Baris ${row}: No. punggung wajib diisi.`)
+    }
+
+    const jenis = (line.jenisItem ?? "").trim()
+    if (!jenis) {
+      errors.push(`Baris ${row}: Jenis item wajib dipilih.`)
+    } else {
+      const jenisLower = jenis.toLowerCase()
+      if (jenisLower === "stelan" || jenisLower === "atasan") {
+        if (!line.jenisKerah?.trim()) {
+          errors.push(`Baris ${row}: Jenis kerah wajib dipilih.`)
+        }
+        if (!line.lengan?.trim()) {
+          errors.push(`Baris ${row}: Lengan wajib dipilih.`)
+        }
+      }
+    }
+
+    if (!line.bahan?.trim()) {
+      errors.push(`Baris ${row}: Bahan wajib diisi.`)
+    }
+    if (!line.warna?.trim()) {
+      errors.push(`Baris ${row}: Warna wajib diisi.`)
+    }
+    if (!line.catatan?.trim()) {
+      errors.push(`Baris ${row}: Keterangan wajib diisi.`)
+    }
+    if (!line.grup?.trim()) {
+      errors.push(`Baris ${row}: Grup wajib diisi.`)
+    }
+  })
+
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, errors: [] }
 }
 
 export async function nextExpressPriority(
@@ -235,6 +385,10 @@ export function resolveLockedKonsumenFields(item: DesignQueueItem) {
     namaKonsumen: item.namaKonsumen,
     noTelepon: item.noTelepon ?? "",
     alamatPengiriman: item.alamatPengiriman ?? "",
+    provinsi: item.provinsi ?? "",
+    kotaKabupaten: item.kotaKabupaten ?? "",
+    kecamatan: item.kecamatan ?? "",
+    kodePos: item.kodePos ?? "",
   }
 }
 

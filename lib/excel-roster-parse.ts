@@ -165,6 +165,11 @@ export function parseExcelRows(
       errors.push(`Baris ${rowNum}: Ukuran wajib diisi.`)
       continue
     }
+    const nomorPunggung = getCell(raw, keyToCol, "No.Punggung")
+    if (!nomorPunggung) {
+      errors.push(`Baris ${rowNum}: No. punggung wajib diisi.`)
+      continue
+    }
     if (!jenisItem) {
       errors.push(
         `Baris ${rowNum}: JenisItem "${jenisItemRaw || "(kosong)"}" tidak valid. Gunakan Stelan, Atasan, atau Bawahan.`
@@ -195,17 +200,39 @@ export function parseExcelRows(
       }
     }
 
+    const bahan = getCell(raw, keyToCol, "Bahan")
+    const warna = getCell(raw, keyToCol, "Warna")
+    const catatan = getCell(raw, keyToCol, "Keterangan")
+    const grup = getCell(raw, keyToCol, "Grup")
+
+    if (!bahan) {
+      errors.push(`Baris ${rowNum}: Bahan wajib diisi.`)
+      continue
+    }
+    if (!warna) {
+      errors.push(`Baris ${rowNum}: Warna wajib diisi.`)
+      continue
+    }
+    if (!catatan) {
+      errors.push(`Baris ${rowNum}: Keterangan wajib diisi.`)
+      continue
+    }
+    if (!grup) {
+      errors.push(`Baris ${rowNum}: Grup wajib diisi.`)
+      continue
+    }
+
     lines.push({
       nama,
       ukuran,
-      nomorPunggung: getCell(raw, keyToCol, "No.Punggung") || undefined,
+      nomorPunggung,
       jenisItem,
       jenisKerah: jenisKerah || undefined,
       lengan: lengan || undefined,
-      bahan: getCell(raw, keyToCol, "Bahan") || undefined,
-      warna: getCell(raw, keyToCol, "Warna") || undefined,
-      catatan: getCell(raw, keyToCol, "Keterangan") || undefined,
-      grup: getCell(raw, keyToCol, "Grup") || undefined,
+      bahan,
+      warna,
+      catatan,
+      grup,
     })
   }
 

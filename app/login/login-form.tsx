@@ -1,4 +1,3 @@
-import type { AuthUser } from "@/lib/auth"
 import { LoginDebugPanel } from "@/app/login/login-debug-panel"
 import { LoginExistingSession } from "@/app/login/login-existing-session"
 
@@ -6,14 +5,12 @@ type LoginFormProps = {
   errorMessage: string | null
   initialUsername: string
   debug?: boolean
-  existingUser?: AuthUser | null
 }
 
 export function LoginForm({
   errorMessage,
   initialUsername,
   debug = false,
-  existingUser = null,
 }: LoginFormProps) {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#030304] px-4 py-16">
@@ -40,7 +37,7 @@ export function LoginForm({
           ERP Konveksi · Masuk sistem
         </p>
 
-        {existingUser ? <LoginExistingSession user={existingUser} /> : null}
+        <LoginExistingSession />
 
         <noscript>
           <p className="mb-4 rounded-lg border border-amber-500/40 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
@@ -115,10 +112,6 @@ export function LoginForm({
         </form>
 
         {debug ? <LoginDebugPanel /> : null}
-
-        <p className="mt-6 text-center font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-          Wi‑Fi harus sama dengan PC server · http://IP-PC:3000/login
-        </p>
       </div>
     </div>
   )

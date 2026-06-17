@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { AuthGateShell } from "@/components/auth-gate"
 import { AppShell, AppShellLoading } from "@/components/layout/app-shell"
 import { OwnerDashboardHeader } from "@/components/dashboard/owner-dashboard-header"
 import { OwnerKpiCards } from "@/components/dashboard/owner-kpi-cards"
@@ -18,7 +19,10 @@ export default function OwnerDashboardPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (auth.status !== "authenticated") return
+    if (auth.status !== "authenticated") {
+      setLoading(false)
+      return
+    }
 
     async function load() {
       setLoading(true)
@@ -44,44 +48,50 @@ export default function OwnerDashboardPage() {
   }, [auth.status])
 
   if (auth.status === "loading") {
-    return (
-      <AppShell>
-        <AppShellLoading />
-      </AppShell>
-    )
+    return <AuthGateShell />
+  }
+
+  if (auth.status === "unauthenticated" || auth.status === "forbidden") {
+    return <AuthGateShell message="Mengalihkan ke login…" />
   }
 
   return (
     <AppShell>
-      <OwnerDashboardHeader workflowEnabled={data?.workflowEnabled ?? false} />
+      <div className="min-w-0 w-full">
+        <OwnerDashboardHeader workflowEnabled={data?.workflowEnabled ?? false} />
 
-      {loading ? (
-        <AppShellLoading />
-      ) : error ? (
-        <div className="neo-card border border-red-500/30 p-6 text-sm text-red-200">
-          {error}
-        </div>
-      ) : data ? (
-        <div className="space-y-8">
-          <OwnerAiCommandCenter />
-
-          <OwnerKpiCards kpis={data.kpis} />
-
-          <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-            <OwnerFinancialSummary
-              financial={data.financial}
-              designQueue={data.designQueue}
-              workflowEnabled={data.workflowEnabled}
-            />
-            <OwnerSalesPerformance
-              salesByCs={data.salesByCs}
-              salesTrend={data.salesTrend}
-            />
+        {loading ? (
+          <AppShellLoading />
+        ) : error ? (
+          <div className="neo-card w-full min-w-0 border border-red-500/30 p-6 text-sm text-red-200">
+            {error}
           </div>
+        ) : data ? (
+          <div className="space-y-8">
+            <OwnerAiCommandCenter />
 
-          <OwnerReportsTable reports={data.recentReports} />
-        </div>
-      ) : null}
+            <OwnerKpiCards kpis={data.kpis} />
+
+            <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+              <OwnerFinancialSummary
+                financial={data.financial}
+                designQueue={data.designQueue}
+                workflowEnabled={data.workflowEnabled}
+              />
+              <OwnerSalesPerformance
+                salesByCs={data.salesByCs}
+                salesTrend={data.salesTrend}
+              />
+            </div>
+
+            <OwnerReportsTable reports={data.recentReports} />
+          </div>
+        ) : (
+          <div className="neo-card w-full min-w-0 p-10 text-center text-zinc-500">
+            Data dashboard belum tersedia. Muat ulang halaman atau hubungi admin.
+          </div>
+        )}
+      </div>
     </AppShell>
   )
 }

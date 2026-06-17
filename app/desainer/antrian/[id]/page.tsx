@@ -347,6 +347,7 @@ export default function DesainerAntrianDetailPage() {
 
   return (
     <AppShell>
+      <div className="min-w-0 w-full">
       <PageHeader
         badge="Desainer"
         title={item.artikelId}
@@ -449,7 +450,7 @@ export default function DesainerAntrianDetailPage() {
         />
       </div>
 
-      <div className="neo-card space-y-4 p-5">
+      <div className="neo-card w-full min-w-0 space-y-4 p-4 sm:p-5">
         <p className="text-sm text-zinc-400">{item.materiDesain}</p>
 
         {canUploadHasil ? (
@@ -490,6 +491,7 @@ export default function DesainerAntrianDetailPage() {
             ← Antrian
           </Link>
         </div>
+      </div>
       </div>
     </AppShell>
   )

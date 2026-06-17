@@ -10,13 +10,13 @@ export function PageHeader({
   description?: string
 }) {
   return (
-    <header className="mb-8">
+    <header className="mb-6 min-w-0 md:mb-8">
       {badge ? (
         <p className="mb-2 font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-orange-500">
           {badge}
         </p>
       ) : null}
-      <h1 className="text-3xl font-bold tracking-tight text-white">
+      <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
         {title}
         {titleAccent ? (
           <span className="text-orange-400"> {titleAccent}</span>

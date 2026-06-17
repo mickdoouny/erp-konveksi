@@ -1,12 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useLayoutEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useServerSessionUser } from "@/components/client-session-provider"
 import { AppShell, AppShellLoading } from "@/components/layout/app-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { BtnApprove, BtnGhost, BtnPrimary } from "@/components/ui/buttons"
-import { readStoredUser, type AuthUser } from "@/lib/auth"
+import { type AuthUser } from "@/lib/auth"
 import { homePathForUser } from "@/lib/auth-redirect"
+import { resolveSessionUser } from "@/lib/login-session"
 import {
   DEPARTMENT_STAGES,
   PRODUKSI_PAGE_TITLES,
@@ -271,6 +273,7 @@ export function OperatorQueuePage({
   showDesignFiles?: boolean
 }) {
   const router = useRouter()
+  const serverUser = useServerSessionUser()
   const meta = PRODUKSI_PAGE_TITLES[department]
   const workstationStages = DEPARTMENT_STAGES[department]
   const [items, setItems] = useState<QueueRow[]>([])
@@ -302,10 +305,10 @@ export function OperatorQueuePage({
     }
   }, [department])
 
-  useEffect(() => {
-    const stored = readStoredUser()
+  useLayoutEffect(() => {
+    const stored = resolveSessionUser(serverUser)
     if (!stored) {
-      router.replace("/login")
+      router.replace("/login?error=session")
       return
     }
     if (stored.role !== "produksi" && stored.role !== "owner") {
@@ -319,7 +322,7 @@ export function OperatorQueuePage({
     queueMicrotask(() => {
       void load()
     })
-  }, [router, load, department])
+  }, [router, load, department, serverUser?.id, serverUser?.role])
 
   function weightFormFor(pipelineId: string): PotongBahanWeightForm {
     return weightForms[pipelineId] ?? EMPTY_POTONG_BAHAN_FORM
@@ -365,7 +368,7 @@ export function OperatorQueuePage({
       affectedParts: string[]
     }
   ) {
-    const user = readStoredUser()
+    const user = resolveSessionUser(serverUser)
     if (!user) return
 
     const res = await fetch("/api/rework-requests", {
@@ -393,7 +396,7 @@ export function OperatorQueuePage({
     action: "start_stage" | "complete_stage",
     currentStatus?: string
   ) {
-    const user = readStoredUser()
+    const user = resolveSessionUser(serverUser)
     if (!user) return
 
     let materialWeights: ReturnType<typeof potongBahanFormToPayload> | undefined

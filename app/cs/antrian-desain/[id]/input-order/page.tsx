@@ -23,6 +23,7 @@ import {
   sanitizeRosterLines,
   usesPerJenisPricing,
   validateCsInputOrderForSubmit,
+  type CsInputOrderFieldErrors,
   type CsJenisProduksi,
   type CsRosterLineInput,
 } from "@/lib/cs-input-order"
@@ -38,6 +39,45 @@ import {
   getFileExtension,
 } from "@/lib/upload-filename"
 import { withCsApiScope } from "@/lib/cs-api-scope"
+
+function fieldErrorClass(hasError: boolean): string {
+  return hasError ? "border-red-500/60 focus:border-red-400" : ""
+}
+
+function formatInputOrderApiError(
+  body: {
+    message?: string
+    errors?: CsInputOrderFieldErrors
+  },
+  fallback: string
+): string {
+  const message = body.message?.trim() || fallback
+  const fieldLines: string[] = []
+  const errors = body.errors
+  if (errors) {
+    for (const key of [
+      "jenisOrder",
+      "jumlahPcs",
+      "hargaStelan",
+      "hargaAtasan",
+      "hargaBawahan",
+      "dpAmount",
+      "tanggalDeadline",
+      "buktiDp",
+      "catatanFinishing",
+    ] as const) {
+      const value = errors[key]
+      if (value) fieldLines.push(`• ${value}`)
+    }
+    if (errors.roster?.length) {
+      fieldLines.push(...errors.roster.map((line) => `• ${line}`))
+    }
+  }
+  if (fieldLines.length) {
+    return `${message}\n\n${fieldLines.join("\n")}`
+  }
+  return message
+}
 
 function RosterPreviewTable({ lines }: { lines: CsRosterLineInput[] }) {
   return (
@@ -95,6 +135,10 @@ export default function CsInputOrderPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [parsingExcel, setParsingExcel] = useState(false)
+  const [saveError, setSaveError] = useState("")
+  const [fieldErrors, setFieldErrors] = useState<CsInputOrderFieldErrors | null>(
+    null
+  )
 
   const [jenisOrder, setJenisOrder] = useState("")
   const [hargaStelan, setHargaStelan] = useState("")
@@ -282,6 +326,12 @@ export default function CsInputOrderPage() {
     const json = await res.json()
     if (res.ok && json.files?.[0]?.url) {
       setBuktiDp(json.files[0].url)
+      setFieldErrors((prev) => {
+        if (!prev?.buktiDp) return prev
+        const next = { ...prev }
+        delete next.buktiDp
+        return Object.keys(next).length > 0 ? next : null
+      })
     }
   }
 
@@ -327,35 +377,49 @@ export default function CsInputOrderPage() {
     event.preventDefault()
     if (!item) return
     if (!canCsSubmitInputOrder(item.statusDesain, item.fileDesainProduksi)) {
-      alert("Desainer harus mengunggah CDR produksi terlebih dahulu.")
+      setSaveError("Desainer harus mengunggah CDR produksi terlebih dahulu.")
       return
     }
 
-    if (
-      qtyNum <= 0 ||
-      Number.isNaN(dpNum) ||
-      dpNum < 0 ||
-      subtotal <= 0
-    ) {
-      alert("Lengkapi harga per jenis, daftar item, dan DP dengan benar.")
+    if (!excelSource && qtyNum > MANUAL_ROSTER_MAX_PCS) {
+      setSaveError(
+        `Order > ${MANUAL_ROSTER_MAX_PCS} PCS wajib unggah Excel roster. Unduh template terlebih dahulu.`
+      )
       return
     }
 
-    const rosterCheck = validateExcelRosterForSubmit(sanitizedRoster, qtyNum)
-    if (!rosterCheck.ok) {
-      alert(rosterCheck.errors?.join("\n") ?? "Roster tidak valid.")
-      return
-    }
+    const rosterForValidation = excelSource ? sanitizedRoster : rosterLines
     const orderCheck = validateCsInputOrderForSubmit({
+      jenisOrder,
+      totalOrder: qtyNum,
+      hargaStelan: hargaStelanNum,
+      hargaAtasan: hargaAtasanNum,
+      hargaBawahan: hargaBawahanNum,
+      dpAmount: dpNum,
+      ongkosKirim: ongkirNum,
       tanggalDeadline,
       jenisProduksi,
+      buktiDp,
+      catatanFinishing,
+      needsKancing,
+      needsDTF,
+      rosterLines: rosterForValidation,
+      subtotal,
+      totalHarga,
     })
+
     if (!orderCheck.ok) {
-      alert(orderCheck.message)
+      setFieldErrors(orderCheck.errors ?? { summary: orderCheck.message })
+      setSaveError(
+        orderCheck.errors?.summary ??
+          orderCheck.message ??
+          "Lengkapi semua kolom wajib sebelum menyimpan"
+      )
       return
     }
 
     const warnings: string[] = []
+    const rosterCheck = validateExcelRosterForSubmit(sanitizedRoster, qtyNum)
     if (rosterCheck.warning) warnings.push(rosterCheck.warning)
     if (pcsMismatch) {
       warnings.push(
@@ -368,13 +432,8 @@ export default function CsInputOrderPage() {
       if (!proceed) return
     }
 
-    if (!excelSource && qtyNum > MANUAL_ROSTER_MAX_PCS) {
-      alert(
-        `Order > ${MANUAL_ROSTER_MAX_PCS} PCS wajib unggah Excel roster. Unduh template terlebih dahulu.`
-      )
-      return
-    }
-
+    setFieldErrors(null)
+    setSaveError("")
     setSaving(true)
     try {
       const user = readStoredUser()
@@ -402,16 +461,18 @@ export default function CsInputOrderPage() {
             needsDTF,
             buktiDp,
             excelSource,
-            rosterLines: sanitizedRoster,
+            rosterLines: rosterForValidation,
           }),
         }
       )
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        alert(
-          json.message ??
-            `Gagal menyimpan order (HTTP ${res.status}).`
+        setSaveError(
+          formatInputOrderApiError(json, `Gagal menyimpan order (HTTP ${res.status}).`)
         )
+        if (json.errors) {
+          setFieldErrors(json.errors as CsInputOrderFieldErrors)
+        }
         return
       }
       router.replace(`/cs/antrian-produksi/${id}`)
@@ -459,7 +520,7 @@ export default function CsInputOrderPage() {
       backHref={`/cs/antrian-desain/${id}`}
       backLabel="← Detail antrian"
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6" noValidate>
         <div className="neo-card p-5">
           <h2 className="mb-4 text-lg font-semibold text-white">
             Informasi konsumen (terkunci)
@@ -540,6 +601,14 @@ export default function CsInputOrderPage() {
             <p className="mb-3 text-sm text-emerald-400">
               File: {excelFileName} · {excelRowCount} baris
             </p>
+          ) : null}
+
+          {fieldErrors?.roster?.length ? (
+            <div className="mb-3 rounded-lg border border-red-500/40 bg-red-950/30 px-3 py-2 text-xs text-red-200">
+              {fieldErrors.roster.map((err) => (
+                <p key={err}>{err}</p>
+              ))}
+            </div>
           ) : null}
 
           {excelErrors.length > 0 ? (
@@ -728,33 +797,58 @@ export default function CsInputOrderPage() {
 
         <div className="neo-card grid gap-4 p-5 md:grid-cols-2">
           <label className="block text-sm">
-            <span className="text-zinc-400">Jenis order (ringkasan)</span>
+            <span className="text-zinc-400">
+              Jenis order (ringkasan) <span className="text-red-400">*</span>
+            </span>
             <select
-              className={selectClass}
+              className={`${selectClass} ${fieldErrorClass(Boolean(fieldErrors?.jenisOrder))}`}
               value={jenisOrder}
-              onChange={(e) => setJenisOrder(e.target.value)}
+              onChange={(e) => {
+                setJenisOrder(e.target.value)
+                setFieldErrors((prev) => {
+                  if (!prev?.jenisOrder) return prev
+                  const next = { ...prev }
+                  delete next.jenisOrder
+                  return Object.keys(next).length > 0 ? next : null
+                })
+              }}
+              aria-invalid={Boolean(fieldErrors?.jenisOrder)}
             >
-              <option value="">Campuran / pilih jika tunggal</option>
+              <option value="">Pilih jenis order</option>
               {CS_JENIS_ORDER_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
               ))}
             </select>
+            {fieldErrors?.jenisOrder ? (
+              <p className="mt-1 text-xs text-red-400">{fieldErrors.jenisOrder}</p>
+            ) : null}
           </label>
           <label className="block text-sm">
-            <span className="text-zinc-400">Jumlah PCS</span>
+            <span className="text-zinc-400">
+              Jumlah PCS <span className="text-red-400">*</span>
+            </span>
             <input
               type="number"
               min={1}
-              className="neo-input mt-1"
+              className={`neo-input mt-1 ${fieldErrorClass(Boolean(fieldErrors?.jumlahPcs))}`}
               value={jumlahPcs}
               onChange={(e) => {
                 setPcsManualOverride(true)
                 setJumlahPcs(e.target.value)
+                setFieldErrors((prev) => {
+                  if (!prev?.jumlahPcs) return prev
+                  const next = { ...prev }
+                  delete next.jumlahPcs
+                  return Object.keys(next).length > 0 ? next : null
+                })
               }}
-              required
+              aria-invalid={Boolean(fieldErrors?.jumlahPcs)}
             />
+            {fieldErrors?.jumlahPcs ? (
+              <p className="mt-1 text-xs text-red-400">{fieldErrors.jumlahPcs}</p>
+            ) : null}
             {pcsMismatch ? (
               <p className="mt-1 text-xs text-amber-300">
                 PCS manual ({qtyNum}) ≠ baris Excel ({excelRowCount})
@@ -766,28 +860,76 @@ export default function CsInputOrderPage() {
             ) : null}
           </label>
           <label className="block text-sm">
-            <span className="text-zinc-400">Harga Stelan (Rp/PCS)</span>
+            <span className="text-zinc-400">
+              Harga Stelan (Rp/PCS){" "}
+              {countsByJenis.Stelan > 0 ? (
+                <span className="text-red-400">*</span>
+              ) : null}
+            </span>
             <RupiahInput
-              className="neo-input mt-1"
+              className={`neo-input mt-1 ${fieldErrorClass(Boolean(fieldErrors?.hargaStelan))}`}
               value={hargaStelan}
-              onChange={setHargaStelan}
+              onChange={(value) => {
+                setHargaStelan(value)
+                setFieldErrors((prev) => {
+                  if (!prev?.hargaStelan) return prev
+                  const next = { ...prev }
+                  delete next.hargaStelan
+                  return Object.keys(next).length > 0 ? next : null
+                })
+              }}
             />
+            {fieldErrors?.hargaStelan ? (
+              <p className="mt-1 text-xs text-red-400">{fieldErrors.hargaStelan}</p>
+            ) : null}
           </label>
           <label className="block text-sm">
-            <span className="text-zinc-400">Harga Atasan (Rp/PCS)</span>
+            <span className="text-zinc-400">
+              Harga Atasan (Rp/PCS){" "}
+              {countsByJenis.Atasan > 0 ? (
+                <span className="text-red-400">*</span>
+              ) : null}
+            </span>
             <RupiahInput
-              className="neo-input mt-1"
+              className={`neo-input mt-1 ${fieldErrorClass(Boolean(fieldErrors?.hargaAtasan))}`}
               value={hargaAtasan}
-              onChange={setHargaAtasan}
+              onChange={(value) => {
+                setHargaAtasan(value)
+                setFieldErrors((prev) => {
+                  if (!prev?.hargaAtasan) return prev
+                  const next = { ...prev }
+                  delete next.hargaAtasan
+                  return Object.keys(next).length > 0 ? next : null
+                })
+              }}
             />
+            {fieldErrors?.hargaAtasan ? (
+              <p className="mt-1 text-xs text-red-400">{fieldErrors.hargaAtasan}</p>
+            ) : null}
           </label>
           <label className="block text-sm">
-            <span className="text-zinc-400">Harga Bawahan/Celana (Rp/PCS)</span>
+            <span className="text-zinc-400">
+              Harga Bawahan/Celana (Rp/PCS){" "}
+              {countsByJenis.Bawahan > 0 ? (
+                <span className="text-red-400">*</span>
+              ) : null}
+            </span>
             <RupiahInput
-              className="neo-input mt-1"
+              className={`neo-input mt-1 ${fieldErrorClass(Boolean(fieldErrors?.hargaBawahan))}`}
               value={hargaBawahan}
-              onChange={setHargaBawahan}
+              onChange={(value) => {
+                setHargaBawahan(value)
+                setFieldErrors((prev) => {
+                  if (!prev?.hargaBawahan) return prev
+                  const next = { ...prev }
+                  delete next.hargaBawahan
+                  return Object.keys(next).length > 0 ? next : null
+                })
+              }}
             />
+            {fieldErrors?.hargaBawahan ? (
+              <p className="mt-1 text-xs text-red-400">{fieldErrors.hargaBawahan}</p>
+            ) : null}
           </label>
 
           {sanitizedRoster.length > 0 ? (
@@ -840,13 +982,25 @@ export default function CsInputOrderPage() {
             />
           </label>
           <label className="block text-sm">
-            <span className="text-zinc-400">DP (Rp)</span>
+            <span className="text-zinc-400">
+              DP (Rp) <span className="text-red-400">*</span>
+            </span>
             <RupiahInput
-              className="neo-input mt-1"
+              className={`neo-input mt-1 ${fieldErrorClass(Boolean(fieldErrors?.dpAmount))}`}
               value={dpAmount}
-              onChange={setDpAmount}
-              required
+              onChange={(value) => {
+                setDpAmount(value)
+                setFieldErrors((prev) => {
+                  if (!prev?.dpAmount) return prev
+                  const next = { ...prev }
+                  delete next.dpAmount
+                  return Object.keys(next).length > 0 ? next : null
+                })
+              }}
             />
+            {fieldErrors?.dpAmount ? (
+              <p className="mt-1 text-xs text-red-400">{fieldErrors.dpAmount}</p>
+            ) : null}
           </label>
           <label className="block text-sm">
             <span className="text-zinc-400">Sisa pelunasan (total − DP)</span>
@@ -878,24 +1032,45 @@ export default function CsInputOrderPage() {
             </div>
           </div>
           <label className="block text-sm">
-            <span className="text-zinc-400">Deadline</span>
+            <span className="text-zinc-400">
+              Deadline <span className="text-red-400">*</span>
+            </span>
             <DatePickerInput
+              className={`neo-input mt-1 ${fieldErrorClass(Boolean(fieldErrors?.tanggalDeadline))}`}
               value={tanggalDeadline}
-              onChange={setTanggalDeadline}
-              required
+              onChange={(value) => {
+                setTanggalDeadline(value)
+                setFieldErrors((prev) => {
+                  if (!prev?.tanggalDeadline) return prev
+                  const next = { ...prev }
+                  delete next.tanggalDeadline
+                  return Object.keys(next).length > 0 ? next : null
+                })
+              }}
             />
+            {fieldErrors?.tanggalDeadline ? (
+              <p className="mt-1 text-xs text-red-400">
+                {fieldErrors.tanggalDeadline}
+              </p>
+            ) : null}
           </label>
           <label className="block text-sm md:col-span-2">
-            <span className="text-zinc-400">Bukti DP</span>
+            <span className="text-zinc-400">
+              Bukti DP <span className="text-red-400">*</span>
+            </span>
             <p className="mt-1 text-xs text-zinc-500">
               {`File disimpan sebagai ${item.artikelId}-bukti-dp.{ekstensi}`}
             </p>
             <input
               type="file"
               accept="image/*"
-              className="neo-input mt-1"
-              onChange={(e) => uploadBukti(e.target.files)}
+              className={`neo-input mt-1 ${fieldErrorClass(Boolean(fieldErrors?.buktiDp))}`}
+              onChange={(e) => void uploadBukti(e.target.files)}
+              aria-invalid={Boolean(fieldErrors?.buktiDp)}
             />
+            {fieldErrors?.buktiDp ? (
+              <p className="mt-1 text-xs text-red-400">{fieldErrors.buktiDp}</p>
+            ) : null}
             {buktiDp ? (
               <p className="mt-1 text-xs text-emerald-400">Bukti tersimpan.</p>
             ) : null}
@@ -925,14 +1100,39 @@ export default function CsInputOrderPage() {
             </label>
           </div>
           <label className="mt-4 block text-sm">
-            <span className="text-zinc-400">Catatan finishing</span>
+            <span className="text-zinc-400">
+              Catatan finishing <span className="text-red-400">*</span>
+            </span>
             <textarea
-              className="neo-input mt-1 min-h-[80px]"
+              className={`neo-input mt-1 min-h-[80px] ${fieldErrorClass(Boolean(fieldErrors?.catatanFinishing))}`}
               value={catatanFinishing}
-              onChange={(e) => setCatatanFinishing(e.target.value)}
+              onChange={(e) => {
+                setCatatanFinishing(e.target.value)
+                setFieldErrors((prev) => {
+                  if (!prev?.catatanFinishing) return prev
+                  const next = { ...prev }
+                  delete next.catatanFinishing
+                  return Object.keys(next).length > 0 ? next : null
+                })
+              }}
+              aria-invalid={Boolean(fieldErrors?.catatanFinishing)}
             />
+            {fieldErrors?.catatanFinishing ? (
+              <p className="mt-1 text-xs text-red-400">
+                {fieldErrors.catatanFinishing}
+              </p>
+            ) : null}
           </label>
         </div>
+
+        {saveError ? (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-300 whitespace-pre-wrap"
+          >
+            {saveError}
+          </div>
+        ) : null}
 
         <button
           type="submit"

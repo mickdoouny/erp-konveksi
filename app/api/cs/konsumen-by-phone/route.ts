@@ -35,6 +35,10 @@ export async function GET(request: Request) {
       namaKonsumen: match.namaKonsumen,
       noTelepon: match.noTelepon,
       alamatPengiriman: match.alamatPengiriman ?? "",
+      provinsi: match.provinsi ?? "",
+      kotaKabupaten: match.kotaKabupaten ?? "",
+      kecamatan: match.kecamatan ?? "",
+      kodePos: match.kodePos ?? "",
       lastOrderAt: match.lastOrderAt.toISOString(),
     })
   } catch (error) {

@@ -16,10 +16,10 @@ export default function CsShell({
   actions,
 }: CsShellProps) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen min-h-[100vh] w-full flex-col md:flex-row">
       <Sidebar />
 
-      <div className="neo-main flex-1">
+      <main className="neo-main min-w-0 flex-1 w-full">
         {(title || actions) && (
           <header className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div>
@@ -39,7 +39,7 @@ export default function CsShell({
         )}
 
         {children}
-      </div>
+      </main>
     </div>
   )
 }

@@ -10,9 +10,11 @@ export function AppShellLoading() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen min-h-[100vh] w-full flex-col md:flex-row">
       <Sidebar />
-      <div className="neo-main flex-1">{children}</div>
+      <main className="neo-main min-w-0 flex-1 w-full">
+        <div className="min-w-0 w-full">{children}</div>
+      </main>
     </div>
   )
 }

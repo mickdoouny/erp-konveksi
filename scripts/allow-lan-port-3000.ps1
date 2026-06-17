@@ -18,6 +18,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $subnetRule = "ERP LAN Subnet In"
 netsh advfirewall firewall delete rule name=$subnetRule 2>$null
 netsh advfirewall firewall add rule name=$subnetRule dir=in action=allow remoteip=192.168.1.0/24 enable=yes profile=any
+netsh advfirewall firewall add rule name="ERP LAN Subnet 100" dir=in action=allow remoteip=192.168.100.0/24 enable=yes profile=any
+netsh advfirewall firewall delete rule name="ERP Tailscale In" 2>$null
+netsh advfirewall firewall add rule name="ERP Tailscale In" dir=in action=allow remoteip=100.64.0.0/10 enable=yes profile=any
 
 $np = "C:\Program Files\nodejs\node.exe"
 if (Test-Path $np) {
@@ -28,7 +31,7 @@ if (Test-Path $np) {
 Write-Host ""
 Write-Host "Firewall rules applied for TCP $Port. Bind server with:"
 Write-Host "  .env: ERP_LAN_BIND_ALL=true  (listen 0.0.0.0)"
-Write-Host "  .env: ERP_LAN_HOST=192.168.1.50  (URL shown to operators)"
-Write-Host "  npm run dev:lan"
+Write-Host "  .env: ERP_LAN_HOST=192.168.100.122  (URL shown to operators)"
+Write-Host "  npm run build && npm run start:lan"
 Write-Host ""
 netsh advfirewall firewall show rule name=$ruleName

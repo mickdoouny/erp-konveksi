@@ -77,25 +77,24 @@ export async function POST(request: Request) {
     const csNama = body.namaCs?.trim() || "CS"
     const now = new Date()
 
-    const explicitSpp = data.artikels
-      .map((artikel) => artikel.spp?.trim())
-      .find(Boolean)
-    let batchSppNumber = explicitSpp ?? null
-    if (!batchSppNumber) {
-      const csUsername = await resolveCsUsernameForSpp({
-        csUsername: body.csUsername,
-        csId: body.csId,
-        db: prisma,
-      })
-      if (csUsername) {
-        batchSppNumber = await allocateNextSppNumber(csUsername, prisma)
-      }
+    const csUsername = await resolveCsUsernameForSpp({
+      csUsername: body.csUsername,
+      csId: body.csId,
+      db: prisma,
+    })
+    if (!csUsername) {
+      return NextResponse.json(
+        { message: "Username CS tidak ditemukan untuk membuat nomor SPP" },
+        { status: 400 }
+      )
     }
+
+    const batchSppNumber = await allocateNextSppNumber(csUsername, prisma)
 
     const created = await prisma.$transaction(
       data.artikels.map((artikel, index) => {
         const artikelId = generateArtikelId(artikelCount + index + 1)
-        const sppNumber = artikel.spp?.trim() || batchSppNumber
+        const sppNumber = batchSppNumber
 
         return prisma.designQueueItem.create({
           data: {
@@ -109,6 +108,10 @@ export async function POST(request: Request) {
             noTelepon: data.telepon,
             noTeleponNormalized: data.noTeleponNormalized,
             alamatPengiriman: data.alamat,
+            provinsi: data.provinsi,
+            kotaKabupaten: data.kotaKabupaten,
+            kecamatan: data.kecamatan,
+            kodePos: data.kodePos,
             namaArtikel: artikel.namaArtikel.trim(),
             sppNumber: sppNumber || null,
             materiDesain: artikel.catatanDesain?.trim() || null,

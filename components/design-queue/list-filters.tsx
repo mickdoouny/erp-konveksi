@@ -94,8 +94,8 @@ export function DesignQueueListFilters({
   const active = filtersActive ?? hasActiveDesignQueueFilters(filters)
 
   return (
-    <div className="mb-6 space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-6 min-w-0 space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <label className="flex min-w-0 flex-1 flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
             Pencarian
@@ -131,7 +131,7 @@ export function DesignQueueListFilters({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {statusOptions?.length ? (
           <FilterSelect
             label="Status desain"

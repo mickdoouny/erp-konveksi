@@ -159,6 +159,7 @@ export default function DesainerAntrianDisetujuiDetailPage() {
 
   return (
     <AppShell>
+      <div className="min-w-0 w-full">
       <PageHeader
         badge="Desainer"
         title={`CDR ${item.artikelId}`}
@@ -223,7 +224,7 @@ export default function DesainerAntrianDisetujuiDetailPage() {
         <DesignPreviewPair item={item} />
       </div>
 
-      <div className="neo-card space-y-4 p-5">
+      <div className="neo-card w-full min-w-0 space-y-4 p-4 sm:p-5">
         <p className="text-sm text-zinc-400">
           Setelah CDR diunggah, CS dapat melanjutkan input order di antrian desain.
         </p>
@@ -266,6 +267,7 @@ export default function DesainerAntrianDisetujuiDetailPage() {
         >
           ← Antrian disetujui
         </Link>
+      </div>
       </div>
     </AppShell>
   )

@@ -13,10 +13,13 @@ import {
 import type { KonsumenHistoryItem } from "@/lib/konsumen-phone-lookup"
 import { withCsApiScope } from "@/lib/cs-api-scope"
 import { isValidIndonesianPhone } from "@/lib/phone-normalize"
+import {
+  ShippingAddressFields,
+  type ShippingAddressFieldKey,
+} from "@/components/cs/shipping-address-fields"
 
 type ArtikelForm = {
   namaArtikel: string
-  spp: string
   catatanDesain: string
   perluDtf: boolean
   perluKancing: boolean
@@ -26,9 +29,8 @@ type ArtikelForm = {
   logoSponsor: DesignFile[]
 }
 
-const emptyArtikel = (spp = ""): ArtikelForm => ({
+const emptyArtikel = (): ArtikelForm => ({
   namaArtikel: "",
-  spp,
   catatanDesain: "",
   perluDtf: false,
   perluKancing: false,
@@ -70,6 +72,10 @@ export default function TambahDesainPage() {
   const [namaKonsumen, setNamaKonsumen] = useState("")
   const [telepon, setTelepon] = useState("")
   const [alamat, setAlamat] = useState("")
+  const [provinsi, setProvinsi] = useState("")
+  const [kotaKabupaten, setKotaKabupaten] = useState("")
+  const [kecamatan, setKecamatan] = useState("")
+  const [kodePos, setKodePos] = useState("")
   const [artikels, setArtikels] = useState<ArtikelForm[]>([emptyArtikel()])
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
@@ -110,10 +116,6 @@ export default function TambahDesainPage() {
         if (cancelled || !res.ok || !data.sppNumber) return
 
         setGroupSpp((current) => current || data.sppNumber)
-        setArtikels((prev) => {
-          if (prev.some((row) => row.spp.trim())) return prev
-          return prev.map((row) => ({ ...row, spp: data.sppNumber }))
-        })
       } catch {
         /* keep empty — server assigns on save */
       } finally {
@@ -143,8 +145,7 @@ export default function TambahDesainPage() {
   }
 
   function addArtikel() {
-    const sharedSpp = artikels[0]?.spp.trim() || groupSpp
-    setArtikels((prev) => [...prev, emptyArtikel(sharedSpp)])
+    setArtikels((prev) => [...prev, emptyArtikel()])
   }
 
   function removeArtikel(index: number) {
@@ -162,7 +163,57 @@ export default function TambahDesainPage() {
         next.namaKonsumen ||
         next.telepon ||
         next.alamat ||
-        (next.artikelNama && Object.keys(next.artikelNama).length > 0)
+        next.provinsi ||
+        next.kotaKabupaten ||
+        next.kecamatan ||
+        next.kodePos ||
+        (next.artikelNama && Object.keys(next.artikelNama).length > 0) ||
+        (next.artikelCatatanDesain &&
+          Object.keys(next.artikelCatatanDesain).length > 0) ||
+        (next.artikelCatatanDtf &&
+          Object.keys(next.artikelCatatanDtf).length > 0) ||
+        (next.artikelDesainUtama &&
+          Object.keys(next.artikelDesainUtama).length > 0) ||
+        (next.artikelLogoSponsor &&
+          Object.keys(next.artikelLogoSponsor).length > 0)
+      return hasRemaining ? next : null
+    })
+  }
+
+  function clearArtikelFieldError(
+    index: number,
+    key:
+      | "artikelNama"
+      | "artikelCatatanDesain"
+      | "artikelCatatanDtf"
+      | "artikelDesainUtama"
+      | "artikelLogoSponsor"
+  ) {
+    setFieldErrors((prev) => {
+      if (!prev?.[key]?.[index]) return prev
+      const nextMap = { ...prev[key] }
+      delete nextMap[index]
+      const next = {
+        ...prev,
+        [key]: Object.keys(nextMap).length > 0 ? nextMap : undefined,
+      }
+      const hasRemaining =
+        next.namaKonsumen ||
+        next.telepon ||
+        next.alamat ||
+        next.provinsi ||
+        next.kotaKabupaten ||
+        next.kecamatan ||
+        next.kodePos ||
+        (next.artikelNama && Object.keys(next.artikelNama).length > 0) ||
+        (next.artikelCatatanDesain &&
+          Object.keys(next.artikelCatatanDesain).length > 0) ||
+        (next.artikelCatatanDtf &&
+          Object.keys(next.artikelCatatanDtf).length > 0) ||
+        (next.artikelDesainUtama &&
+          Object.keys(next.artikelDesainUtama).length > 0) ||
+        (next.artikelLogoSponsor &&
+          Object.keys(next.artikelLogoSponsor).length > 0)
       return hasRemaining ? next : null
     })
   }
@@ -170,7 +221,6 @@ export default function TambahDesainPage() {
   function isArtikelEmpty(row: ArtikelForm): boolean {
     return (
       !row.namaArtikel.trim() &&
-      !row.spp.trim() &&
       !row.catatanDesain.trim() &&
       !row.perluDtf &&
       !row.perluKancing &&
@@ -184,7 +234,6 @@ export default function TambahDesainPage() {
   function applyOrderUlang(item: KonsumenHistoryItem) {
     const prefilled: ArtikelForm = {
       namaArtikel: item.namaArtikel,
-      spp: item.sppNumber ?? "",
       catatanDesain: item.catatan ?? "",
       perluDtf: item.perluDtf,
       perluKancing: item.perluKancing ?? false,
@@ -268,9 +317,17 @@ export default function TambahDesainPage() {
       )
       setNamaKonsumen(data.nama ?? "")
       setAlamat(data.alamat ?? "")
+      setProvinsi(data.provinsi ?? "")
+      setKotaKabupaten(data.kotaKabupaten ?? "")
+      setKecamatan(data.kecamatan ?? "")
+      setKodePos(data.kodePos ?? "")
       setOrderHistory(Array.isArray(data.history) ? data.history : [])
       clearFieldError("namaKonsumen")
       clearFieldError("alamat")
+      clearFieldError("provinsi")
+      clearFieldError("kotaKabupaten")
+      clearFieldError("kecamatan")
+      clearFieldError("kodePos")
     } catch {
       if (requestId !== lookupRequestIdRef.current) return
       setLookupHint("")
@@ -327,7 +384,18 @@ export default function TambahDesainPage() {
       namaKonsumen,
       telepon,
       alamat,
-      artikels,
+      provinsi,
+      kotaKabupaten,
+      kecamatan,
+      kodePos,
+      artikels: artikels.map((a) => ({
+        namaArtikel: a.namaArtikel,
+        catatanDesain: a.catatanDesain,
+        perluDtf: a.perluDtf,
+        catatanDtf: a.catatanDtf,
+        desainUtama: a.desainUtama,
+        logoSponsor: a.logoSponsor,
+      })),
     })
 
     if (hasCsTambahDesainFieldErrors(validation)) {
@@ -350,9 +418,12 @@ export default function TambahDesainPage() {
           namaKonsumen: namaKonsumen.trim(),
           telepon: telepon.trim(),
           alamat: alamat.trim(),
+          provinsi: provinsi.trim(),
+          kotaKabupaten: kotaKabupaten.trim(),
+          kecamatan: kecamatan.trim(),
+          kodePos: kodePos.trim(),
           artikels: artikels.map((a) => ({
             namaArtikel: a.namaArtikel.trim(),
-            spp: a.spp.trim() || undefined,
             catatanDesain: a.catatanDesain.trim() || undefined,
             perluDtf: a.perluDtf,
             perluKancing: a.perluKancing,
@@ -375,10 +446,39 @@ export default function TambahDesainPage() {
             if (row.field === "namaKonsumen") next.namaKonsumen = row.message
             if (row.field === "telepon") next.telepon = row.message
             if (row.field === "alamat") next.alamat = row.message
-            const artikelMatch = row.field.match(/^artikels\.(\d+)\.namaArtikel$/)
-            if (artikelMatch) {
-              const idx = Number(artikelMatch[1])
-              next.artikelNama = { ...(next.artikelNama ?? {}), [idx]: row.message }
+            if (row.field === "provinsi") next.provinsi = row.message
+            if (row.field === "kotaKabupaten") next.kotaKabupaten = row.message
+            if (row.field === "kecamatan") next.kecamatan = row.message
+            if (row.field === "kodePos") next.kodePos = row.message
+            const artikelFieldMatch = row.field.match(
+              /^artikels\.(\d+)\.(namaArtikel|catatanDesain|catatanDtf|desainUtama|logoSponsor)$/
+            )
+            if (artikelFieldMatch) {
+              const idx = Number(artikelFieldMatch[1])
+              const field = artikelFieldMatch[2]
+              if (field === "namaArtikel") {
+                next.artikelNama = { ...(next.artikelNama ?? {}), [idx]: row.message }
+              } else if (field === "catatanDesain") {
+                next.artikelCatatanDesain = {
+                  ...(next.artikelCatatanDesain ?? {}),
+                  [idx]: row.message,
+                }
+              } else if (field === "catatanDtf") {
+                next.artikelCatatanDtf = {
+                  ...(next.artikelCatatanDtf ?? {}),
+                  [idx]: row.message,
+                }
+              } else if (field === "desainUtama") {
+                next.artikelDesainUtama = {
+                  ...(next.artikelDesainUtama ?? {}),
+                  [idx]: row.message,
+                }
+              } else if (field === "logoSponsor") {
+                next.artikelLogoSponsor = {
+                  ...(next.artikelLogoSponsor ?? {}),
+                  [idx]: row.message,
+                }
+              }
             }
           }
           setFieldErrors(next)
@@ -464,23 +564,49 @@ export default function TambahDesainPage() {
                 <p className="mt-1 text-xs text-red-400">{fieldErrors.namaKonsumen}</p>
               ) : null}
             </label>
-            <label className="block text-sm md:col-span-2">
-              <span className="mb-1 block text-zinc-400">
-                Alamat pengiriman <span className="text-red-400">*</span>
-              </span>
-              <textarea
-                className={`neo-input min-h-[88px] ${fieldErrorClass(Boolean(fieldErrors?.alamat))}`}
-                value={alamat}
-                onChange={(e) => {
-                  setAlamat(e.target.value)
-                  clearFieldError("alamat")
-                }}
-                aria-invalid={Boolean(fieldErrors?.alamat)}
-              />
-              {fieldErrors?.alamat ? (
-                <p className="mt-1 text-xs text-red-400">{fieldErrors.alamat}</p>
-              ) : null}
-            </label>
+            <ShippingAddressFields
+              alamat={alamat}
+              provinsi={provinsi}
+              kotaKabupaten={kotaKabupaten}
+              kecamatan={kecamatan}
+              kodePos={kodePos}
+              errors={fieldErrors}
+              onChange={(field: ShippingAddressFieldKey, value: string) => {
+                switch (field) {
+                  case "alamat":
+                    setAlamat(value)
+                    break
+                  case "provinsi":
+                    setProvinsi(value)
+                    break
+                  case "kotaKabupaten":
+                    setKotaKabupaten(value)
+                    break
+                  case "kecamatan":
+                    setKecamatan(value)
+                    break
+                  case "kodePos":
+                    setKodePos(value)
+                    break
+                }
+              }}
+              onClearError={clearFieldError}
+              fieldErrorClass={fieldErrorClass}
+            />
+            <div className="block text-sm md:col-span-2">
+              <span className="mb-1 block text-zinc-400">No. SPP</span>
+              <p
+                className="neo-input bg-zinc-900/60 text-zinc-300"
+                aria-live="polite"
+              >
+                {groupSpp || (sppLoading ? "…" : "—")}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                {sppLoading
+                  ? "Membuat nomor SPP otomatis…"
+                  : "Nomor SPP otomatis (tidak dapat diubah)"}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -575,16 +701,7 @@ export default function TambahDesainPage() {
                   value={artikel.namaArtikel}
                   onChange={(e) => {
                     updateArtikel(index, { namaArtikel: e.target.value })
-                    setFieldErrors((prev) => {
-                      if (!prev?.artikelNama?.[index]) return prev
-                      const nextArtikel = { ...prev.artikelNama }
-                      delete nextArtikel[index]
-                      return {
-                        ...prev,
-                        artikelNama:
-                          Object.keys(nextArtikel).length > 0 ? nextArtikel : undefined,
-                      }
-                    })
+                    clearArtikelFieldError(index, "artikelNama")
                   }}
                   aria-invalid={Boolean(fieldErrors?.artikelNama?.[index])}
                 />
@@ -594,29 +711,24 @@ export default function TambahDesainPage() {
                   </p>
                 ) : null}
               </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-zinc-400">No. SPP</span>
-                <input
-                  className="neo-input bg-zinc-900/60 text-zinc-300"
-                  value={artikel.spp}
-                  readOnly
-                  aria-readonly
-                />
-                <p className="mt-1 text-xs text-zinc-500">
-                  {sppLoading && index === 0
-                    ? "Membuat nomor SPP otomatis…"
-                    : "Nomor SPP otomatis"}
-                </p>
-              </label>
               <label className="block text-sm md:col-span-2">
-                <span className="mb-1 block text-zinc-400">Catatan desain</span>
+                <span className="mb-1 block text-zinc-400">
+                  Catatan desain <span className="text-red-400">*</span>
+                </span>
                 <textarea
-                  className="neo-input min-h-[72px]"
+                  className={`neo-input min-h-[72px] ${fieldErrorClass(Boolean(fieldErrors?.artikelCatatanDesain?.[index]))}`}
                   value={artikel.catatanDesain}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     updateArtikel(index, { catatanDesain: e.target.value })
-                  }
+                    clearArtikelFieldError(index, "artikelCatatanDesain")
+                  }}
+                  aria-invalid={Boolean(fieldErrors?.artikelCatatanDesain?.[index])}
                 />
+                {fieldErrors?.artikelCatatanDesain?.[index] ? (
+                  <p className="mt-1 text-xs text-red-400">
+                    {fieldErrors.artikelCatatanDesain[index]}
+                  </p>
+                ) : null}
               </label>
               <div className="md:col-span-2 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
                 <div className="flex flex-wrap gap-x-6 gap-y-2">
@@ -656,29 +768,47 @@ export default function TambahDesainPage() {
                 </div>
                 {artikel.perluDtf ? (
                   <label className="block text-sm">
-                    <span className="mb-1 block text-zinc-400">Catatan DTF</span>
+                    <span className="mb-1 block text-zinc-400">
+                      Catatan DTF <span className="text-red-400">*</span>
+                    </span>
                     <textarea
-                      className="neo-input min-h-[64px]"
+                      className={`neo-input min-h-[64px] ${fieldErrorClass(Boolean(fieldErrors?.artikelCatatanDtf?.[index]))}`}
                       value={artikel.catatanDtf}
                       placeholder="Posisi print, ukuran, warna film, dll."
-                      onChange={(e) =>
+                      onChange={(e) => {
                         updateArtikel(index, { catatanDtf: e.target.value })
-                      }
+                        clearArtikelFieldError(index, "artikelCatatanDtf")
+                      }}
+                      aria-invalid={Boolean(fieldErrors?.artikelCatatanDtf?.[index])}
                     />
+                    {fieldErrors?.artikelCatatanDtf?.[index] ? (
+                      <p className="mt-1 text-xs text-red-400">
+                        {fieldErrors.artikelCatatanDtf[index]}
+                      </p>
+                    ) : null}
                   </label>
                 ) : null}
               </div>
               <label className="block text-sm">
-                <span className="mb-1 block text-zinc-400">Desain utama</span>
+                <span className="mb-1 block text-zinc-400">
+                  Desain utama <span className="text-red-400">*</span>
+                </span>
                 <input
                   type="file"
                   multiple
                   accept="image/*,.cdr,.pdf"
-                  className="neo-input"
-                  onChange={(e) =>
-                    uploadFiles(index, "desainUtama", e.target.files)
-                  }
+                  className={`neo-input ${fieldErrorClass(Boolean(fieldErrors?.artikelDesainUtama?.[index]))}`}
+                  onChange={(e) => {
+                    clearArtikelFieldError(index, "artikelDesainUtama")
+                    void uploadFiles(index, "desainUtama", e.target.files)
+                  }}
+                  aria-invalid={Boolean(fieldErrors?.artikelDesainUtama?.[index])}
                 />
+                {fieldErrors?.artikelDesainUtama?.[index] ? (
+                  <p className="mt-1 text-xs text-red-400">
+                    {fieldErrors.artikelDesainUtama[index]}
+                  </p>
+                ) : null}
                 {uploading === `${index}-desainUtama` ? (
                   <p className="mt-1 text-xs text-orange-400">Mengunggah…</p>
                 ) : null}
@@ -689,16 +819,25 @@ export default function TambahDesainPage() {
                 ) : null}
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block text-zinc-400">Logo sponsor</span>
+                <span className="mb-1 block text-zinc-400">
+                  Logo sponsor <span className="text-red-400">*</span>
+                </span>
                 <input
                   type="file"
                   multiple
                   accept="image/*,.cdr,.pdf"
-                  className="neo-input"
-                  onChange={(e) =>
-                    uploadFiles(index, "logoSponsor", e.target.files)
-                  }
+                  className={`neo-input ${fieldErrorClass(Boolean(fieldErrors?.artikelLogoSponsor?.[index]))}`}
+                  onChange={(e) => {
+                    clearArtikelFieldError(index, "artikelLogoSponsor")
+                    void uploadFiles(index, "logoSponsor", e.target.files)
+                  }}
+                  aria-invalid={Boolean(fieldErrors?.artikelLogoSponsor?.[index])}
                 />
+                {fieldErrors?.artikelLogoSponsor?.[index] ? (
+                  <p className="mt-1 text-xs text-red-400">
+                    {fieldErrors.artikelLogoSponsor[index]}
+                  </p>
+                ) : null}
                 {uploading === `${index}-logoSponsor` ? (
                   <p className="mt-1 text-xs text-orange-400">Mengunggah…</p>
                 ) : null}

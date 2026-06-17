@@ -1,6 +1,6 @@
 # Handoff Agent — ERP Konveksi
 
-**Baca ini dulu di chat baru.** Panduan operator LAN: [`docs/LAN-OPERATOR-LOGIN.md`](LAN-OPERATOR-LOGIN.md). Alur produksi/keuangan: [`docs/TWO-TRACK-WORKFLOW.md`](TWO-TRACK-WORKFLOW.md).
+**Baca ini dulu di chat baru.** Operator cepat (1 halaman): [`docs/OPERATOR-QUICK-START.md`](OPERATOR-QUICK-START.md). Panduan LAN: [`docs/LAN-OPERATOR-LOGIN.md`](LAN-OPERATOR-LOGIN.md). Operator **Router 1** (jauh dari server Router 2): [`docs/TAILSCALE-OPERATOR-ACCESS.md`](TAILSCALE-OPERATOR-ACCESS.md). Alur produksi/keuangan: [`docs/TWO-TRACK-WORKFLOW.md`](TWO-TRACK-WORKFLOW.md).
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Area | Status |
 |------|--------|
-| **LAN login** | `npm run dev:lan` → `http://192.168.0.16:3000/login` (ganti IP jika `ipconfig` beda) |
+| **LAN login** | `npm run build` + `npm run start:lan` → `http://192.168.100.122:3000/login` (ganti IP jika `ipconfig` beda; set `ERP_LAN_HOST`) |
 | **Akun demo** | `cs1`/`cs2`/`cs3`, `desainer1`–`desainer3`, password **`12345`** |
 | **Sesi** | POST `/api/login` → cookie `erp_user`; form login **selalu** tampil; **Logout & ganti akun** |
 | **CS** | Antrian desain + produksi (data scoped per CS) |
@@ -26,10 +26,10 @@
 
 | Peran | Login | Password |
 |-------|-------|----------|
-| CS | http://192.168.0.16:3000/login → `cs1` | `12345` |
+| CS | `http://192.168.100.122:3000/login` → `cs1` | `12345` |
 | Desainer | sama → `desainer1` | `12345` |
 
-Setelah login: CS → `/cs/antrian-desain`; Desainer → `/desainer/antrian`.
+Setelah login: CS → `/cs/antrian-desain`; Desainer → `/desainer/antrian`. Verifikasi parity: `npm run verify:lan` (`scripts/verify-lan-parity.mjs`).
 
 ### Env penting
 
@@ -41,13 +41,27 @@ ALLOWED_DEV_ORIGINS=      # tambah IP LAN jika berubah
 ERP_LAN_HOST=             # opsional, IP server
 ```
 
-Restart `npm run dev:lan` setelah ubah `.env`. Verifikasi workflow: `GET /api/final-orders/workflow` → `{ "enabled": true }`.
+Restart `npm run start:lan` (atau `npm run restart:lan`) setelah ubah `.env`. Verifikasi workflow: `GET /api/final-orders/workflow` → `{ "enabled": true }`. Verifikasi LAN: `npm run verify:lan` + `npm run diagnose:lan`.
+
+### Tailscale — operator Router 1 (Juni 2026)
+
+| Item | Status |
+|------|--------|
+| Server ERP (Router 2) | Tailscale **v1.98.4**, hostname `server-erp`, IP **`100.92.73.115`** |
+| Tailnet | `mickdouny@gmail.com` — MagicDNS `server-erp.tailc9a455.ts.net` |
+| PC operator Router 1 | **Belum join** tailnet — install + login Tailscale di tiap PC |
+| URL operator (Tailscale) | `http://100.92.73.115:3000/login` |
+| Verifikasi server | `.\scripts\check-tailscale-erp.ps1` |
+| Panduan lengkap | [`docs/TAILSCALE-OPERATOR-ACCESS.md`](TAILSCALE-OPERATOR-ACCESS.md) |
+
+`.env` sudah memuat origin Tailscale di `ALLOWED_DEV_ORIGINS`. Restart `npm run start:lan` setelah ubah.
 
 ### Ditunda (jangan blokir lanjut)
 
 - Integrasi OpenAI API (DPK AI)
-- Build production penuh untuk LAN (opsional; dev:lan cukup untuk latihan)
+- `dev:lan` hanya untuk development lokal admin — operator wajib `start:lan` (production)
 - Beberapa peringatan ESLint
+- Subnet router Tailscale (`192.168.1.0/24`) — opsional; IP Tailscale langsung cukup
 
 ### File kritis — auth LAN
 
